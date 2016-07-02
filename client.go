@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"strconv"
+	"strings"
 )
 
 /*Client the main object that will hold information about what server to connect to
@@ -16,7 +17,11 @@ type Client struct {
 	Server   string
 	Port     int
 	SSL      bool
-	RecvData chan []byte
+	Nick     string //user refactor to its own obj?
+	Password string //user refactor to its own obj?
+
+	RecvChanel chan []byte //receving data from a channle, e.g PRIVMSG
+	RecvServer chan []byte //receving data from the server, e.g CONNECT/DISCONNECT
 
 	open        bool
 	ircChannels []channel
@@ -34,10 +39,11 @@ func (c *Client) ConnectToServer() error {
 		c.Port = 6697
 	}
 	c.ircChannels = make([]channel, 5)
-	c.RecvData = make(chan []byte)
+	c.RecvServer = make(chan []byte)
+	c.RecvChanel = make(chan []byte)
 	c.open = false
 
-	raddrString := c.Server + ":" + strconv.Itoa(c.Port)
+	raddrString := net.JoinHostPort(c.Server, strconv.Itoa(c.Port))
 
 	raddr, err := net.ResolveTCPAddr("tcp", raddrString)
 	if err != nil {
@@ -71,31 +77,76 @@ func (c *Client) CloseConnection() {
 	c.conn.Close()
 }
 
-//ReadIt delet memememememem i dont know
-// func (c *Client) ReadIt() chan []byte {
-// 	return c.recvData
-// }
+//SendPongResponse will send a PONG response when a PING request was recieved
+func (c *Client) SendPongResponse() {
+	_, err := c.connIO.Writer.Write([]byte("PONG " + c.Server + "\r\n"))
+	if err != nil {
+		//return this duh
+		log.Println(err.Error)
+	}
+
+	if c.connIO.Writer.Buffered() > 0 {
+		c.connIO.Writer.Flush()
+	}
+}
 
 //BeginListening reads from an open Client connection, returns data read or error
 func (c *Client) BeginListening() {
+	var userMsg string
 
-	go func(recv chan []byte) {
+	if c.Password != "" {
+		userMsg = "PASS " + c.Password + "\r\nNICK " + c.Nick + "\r\nUSER " + c.Nick + " 0 * :goirc bot\r\n"
+	} else {
+		userMsg = "NICK " + c.Nick + "\r\nUSER " + c.Nick + " 0 * :goirc bot\r\n"
+	}
+
+	go func(rSrv, rChn chan []byte) {
 		data := make([]byte, 1024)
 
+		// tell IRC who we are
+		_, err := c.connIO.Write([]byte(userMsg))
+		if err != nil {
+			log.Printf("Error writing to IRC: %v", err)
+		}
+		if c.connIO.Writer.Buffered() > 0 {
+			c.connIO.Flush()
+		}
+
 		for c.open {
-			read, err := c.connIO.Read(data)
+			read, err := c.connIO.Reader.Read(data)
 			if err != nil {
 				log.Printf("Error BeginListening: %v", err)
 				break
 			}
-			recv <- data[:read]
+
+			if strings.Contains(string(data[:read]), "PRIVMSG") {
+				rChn <- data[:read]
+			} else {
+				rSrv <- data[:read]
+			}
 		}
-	}(c.RecvData)
+	}(c.RecvServer, c.RecvChanel)
 }
 
 //ConnectToChannel connects to a channel, returns an error if already connected
-func (c *Client) ConnectToChannel(channel string) error {
-	return errors.New("already connected to room ")
+func (c *Client) ConnectToChannel(chName string) error {
+	if chName[0] != '#' {
+		chName = "#" + chName
+	}
+
+	nc := channel{
+		name:      chName,
+		connected: false,
+		active:    false,
+	}
+
+	err := nc.connect(c.connIO)
+	if err != nil {
+		return err
+	}
+
+	c.ircChannels = append(c.ircChannels, nc)
+	return nil
 }
 
 //DisconnectFromChannel disconnects from a channel, returns an error if not connected to that channel
