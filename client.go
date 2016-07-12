@@ -95,8 +95,8 @@ func (c *Client) SendPongResponse() {
 	}
 }
 
-//BeginListening reads from an open Client connection, returns data read or error
-func (c *Client) BeginListening() {
+//ConnectAndListen reads from an open Client connection, returns data read or error
+func (c *Client) ConnectAndListen() {
 	var userMsg string
 
 	if c.Password != "" {
@@ -119,7 +119,7 @@ func (c *Client) BeginListening() {
 		for c.open {
 			read, err := c.connIO.Reader.ReadString('\n')
 			if err != nil {
-				log.Printf("Error BeginListening: %v", err)
+				log.Printf("Error ConnectAndListen: %v", err)
 				break
 			}
 
@@ -157,6 +157,7 @@ func (c *Client) ConnectToChannel(chName string) error {
 }
 
 //DisconnectFromChannel disconnects from a channel, returns an error if not connected to that channel
+//move to channel file
 func (c *Client) DisconnectFromChannel(ch *channel, msg string) error {
 	if msg == "" {
 		msg = "goirc by nexes" //temp right now
@@ -179,6 +180,7 @@ func (c *Client) DisconnectFromChannel(ch *channel, msg string) error {
 		}
 	}
 
+	//make sure this is working
 	if index >= 0 {
 		c.ircChannels = append(c.ircChannels[:index], c.ircChannels[index+1:]...)
 	}
@@ -193,11 +195,31 @@ func (c *Client) GetChannel(name string) *channel {
 			return &ch
 		}
 	}
-
 	return nil
 }
 
-//SendMessage I dont know if i like this here, should be on the channel object?
-func (c *Client) SendMessage(ch *channel, msg string) {
-	ch.sendMessage(c.connIO.Writer, msg)
+//SendMessageToChannel I dont know if i like this here, should be on the channel object?
+//move to channel file
+// func (c *Client) SendMessageToChannel(ch *channel, msg string) {
+// 	ch.sendMessage(c.connIO.Writer, msg)
+// }
+
+//SendMessageToUser will send a message to a user, should be in user file?
+func (c *Client) SendMessageToUser(nick, msg string) error {
+	msg = "PRIVMSG " + nick + " :" + msg // change all these the use the fmt function
+
+	_, err := c.connIO.Writer.WriteString(msg)
+	if err != nil {
+		return err
+	}
+
+	if c.connIO.Writer.Buffered() > 0 {
+		c.connIO.Writer.Flush()
+	}
+	return nil
+}
+
+//ChangeNick change your current NICK
+func (c *Client) ChangeNick(nick string) error {
+	return nil
 }

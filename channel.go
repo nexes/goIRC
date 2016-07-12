@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"errors"
 	"log"
+	"sort"
 	"strings"
 )
 
@@ -14,7 +15,9 @@ type channel struct {
 	nicks    []string
 
 	connected bool
-	active    bool //this the active channel the user is typing in (needed)
+	active    bool //this the active channel the user is typing in (needed?)
+
+	writer *bufio.Writer
 }
 
 func (c *channel) connect(recv chan []byte, io *bufio.ReadWriter) error {
@@ -25,6 +28,8 @@ func (c *channel) connect(recv chan []byte, io *bufio.ReadWriter) error {
 		errmsg := "error joining " + c.chName + ": " + err.Error()
 		return errors.New(errmsg)
 	}
+
+	c.writer = io.Writer
 
 	//flush out the buffer if needed
 	if io.Writer.Buffered() > 0 {
@@ -54,18 +59,24 @@ func (c *channel) connect(recv chan []byte, io *bufio.ReadWriter) error {
 	return nil
 }
 
-//sendMessage send a message to the channel
-func (c *channel) sendMessage(w *bufio.Writer, msg string) {
+//SendMessage send a message to the channel
+func (c *channel) SendMessage(msg string) {
 	chat := "PRIVMSG " + c.chName + " :" + msg
 
-	_, err := w.Write([]byte(chat))
+	_, err := c.writer.Write([]byte(chat))
 	if err != nil {
 		log.Printf("Channel writing error %s", err.Error())
 	}
 
-	if w.Buffered() > 0 {
-		w.Flush()
+	if c.writer.Buffered() > 0 {
+		c.writer.Flush()
 	}
+}
+
+//SendMessageToUser send a message to a user. if the nick is not found in the nick list the message wont be sent.
+func (c *channel) SendMessageToUser(nick, msg string) {
+	//can you send a message to a user outside of the channel?
+
 }
 
 //ChannelName returns the channel name
@@ -93,4 +104,6 @@ func (c *channel) updateNickList(data string) {
 	for _, nick := range nicks {
 		c.nicks = append(c.nicks, nick)
 	}
+	//check for duplicates
+	sort.Strings(c.nicks)
 }
