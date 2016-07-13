@@ -74,9 +74,25 @@ func (c *channel) SendMessage(msg string) {
 }
 
 //SendMessageToUser send a message to a user. if the nick is not found in the nick list the message wont be sent.
-func (c *channel) SendMessageToUser(nick, msg string) {
-	//can you send a message to a user outside of the channel?
+func (c *channel) SendMessageToUser(nick, msg string) error {
+	if !sort.StringsAreSorted(c.nicks) {
+		sort.Strings(c.nicks)
+	}
+	index := sort.SearchStrings(c.nicks, nick)
+	if index < len(c.nicks) && strings.EqualFold(nick, c.nicks[index]) {
 
+		_, err := c.writer.Write([]byte("PRIVMSG " + nick + " :" + msg))
+		if err != nil {
+			return err
+		}
+
+		if c.writer.Buffered() > 0 {
+			c.writer.Flush()
+		}
+
+		return nil
+	}
+	return errors.New("Nick " + nick + " wasn't found to send a message to")
 }
 
 //ChannelName returns the channel name
@@ -100,10 +116,8 @@ func (c *channel) ChannelTopic() string {
 //you will need to update this list when users join/quit
 func (c *channel) updateNickList(data string) {
 	nicks := strings.Split(data, " ")
+	c.nicks = append(c.nicks, nicks[0:]...)
 
-	for _, nick := range nicks {
-		c.nicks = append(c.nicks, nick)
-	}
 	//check for duplicates
 	sort.Strings(c.nicks)
 }

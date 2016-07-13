@@ -157,7 +157,6 @@ func (c *Client) ConnectToChannel(chName string) error {
 }
 
 //DisconnectFromChannel disconnects from a channel, returns an error if not connected to that channel
-//move to channel file
 func (c *Client) DisconnectFromChannel(ch *channel, msg string) error {
 	if msg == "" {
 		msg = "goirc by nexes" //temp right now
@@ -194,27 +193,6 @@ func (c *Client) GetChannel(name string) *channel {
 		if strings.Contains(ch.chName, name) {
 			return &ch
 		}
-	}
-	return nil
-}
-
-//SendMessageToChannel I dont know if i like this here, should be on the channel object?
-//move to channel file
-// func (c *Client) SendMessageToChannel(ch *channel, msg string) {
-// 	ch.sendMessage(c.connIO.Writer, msg)
-// }
-
-//SendMessageToUser will send a message to a user, should be in user file?
-func (c *Client) SendMessageToUser(nick, msg string) error {
-	msg = "PRIVMSG " + nick + " :" + msg // change all these the use the fmt function
-
-	_, err := c.connIO.Writer.WriteString(msg)
-	if err != nil {
-		return err
-	}
-
-	if c.connIO.Writer.Buffered() > 0 {
-		c.connIO.Writer.Flush()
 	}
 	return nil
 }
