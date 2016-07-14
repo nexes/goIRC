@@ -47,6 +47,7 @@ func (c *Client) ConnectToServer() error {
 
 	raddr, err := net.ResolveTCPAddr("tcp", raddrString)
 	if err != nil {
+		log.Printf("resolve tcp for %s: %s", raddrString, err.Error())
 		return err
 	}
 
@@ -76,7 +77,7 @@ func (c *Client) CloseConnection() {
 	log.Println("closed called")
 	c.open = false
 	c.connIO.Writer.Flush()
-	c.connIO.Reader.Discard(c.connIO.Reader.Buffered())
+	// c.connIO.Reader.Discard(c.connIO.Reader.Buffered())
 
 	c.conn.Close()
 	//channels take care of them selfs?
@@ -87,7 +88,7 @@ func (c *Client) SendPongResponse() {
 	_, err := c.connIO.Writer.Write([]byte("PONG " + c.Server + "\r\n"))
 	if err != nil {
 		//return this duh
-		log.Println(err.Error)
+		log.Println(err.Error())
 	}
 
 	if c.connIO.Writer.Buffered() > 0 {
@@ -95,8 +96,8 @@ func (c *Client) SendPongResponse() {
 	}
 }
 
-//ConnectAndListen reads from an open Client connection, returns data read or error
-func (c *Client) ConnectAndListen() {
+//Listen reads from an open Client connection, returns data read or error
+func (c *Client) Listen() {
 	var userMsg string
 
 	if c.Password != "" {
@@ -158,31 +159,25 @@ func (c *Client) ConnectToChannel(chName string) error {
 
 //DisconnectFromChannel disconnects from a channel, returns an error if not connected to that channel
 func (c *Client) DisconnectFromChannel(ch *channel, msg string) error {
-	if msg == "" {
-		msg = "goirc by nexes" //temp right now
-	}
 	ch.connected = false
 
-	_, err := c.connIO.Writer.Write([]byte("PART " + ch.chName + " :" + msg))
+	_, err := c.connIO.Writer.WriteString("PART " + ch.chName + " :" + msg + "\r\n")
 	if err != nil {
 		return err
 	}
-	if c.connIO.Writer.Buffered() > 0 {
-		c.connIO.Writer.Flush()
-	}
+	c.connIO.Writer.Flush()
 
-	index := -1
-	for i, v := range c.ircChannels {
+	for _, v := range c.ircChannels {
 		if v.chName == ch.chName {
-			index = i
+			log.Printf("found channel to part, %s", ch.chName)
 			break
 		}
 	}
 
-	//make sure this is working
-	if index >= 0 {
-		c.ircChannels = append(c.ircChannels[:index], c.ircChannels[index+1:]...)
-	}
+	// //make sure this is working
+	// if index >= 0 {
+	// 	c.ircChannels = append(c.ircChannels[:index], c.ircChannels[index+1:]...)
+	// }
 
 	return nil
 }
@@ -190,7 +185,7 @@ func (c *Client) DisconnectFromChannel(ch *channel, msg string) error {
 //GetChannel will return the channel object if one exists for the channel name given
 func (c *Client) GetChannel(name string) *channel {
 	for _, ch := range c.ircChannels {
-		if strings.Contains(ch.chName, name) {
+		if strings.Contains(ch.chName, name) { // == ?
 			return &ch
 		}
 	}
@@ -199,5 +194,59 @@ func (c *Client) GetChannel(name string) *channel {
 
 //ChangeNick change your current NICK
 func (c *Client) ChangeNick(nick string) error {
+	if c.Nick != nick {
+		c.Nick = nick
+	}
+
+	_, err := c.connIO.Writer.WriteString("NICK " + c.Nick + "\r\n")
+	if err != nil {
+		return err
+	}
+
+	//do we need all these
+	if c.connIO.Writer.Buffered() > 0 {
+		c.connIO.Writer.Flush()
+	}
 	return nil
 }
+
+//QueryWho return information about the nick passed. Mask is defaulted to 0 if left blank
+func (c *Client) QueryWho(nick, mask string) error {
+	if mask == "" {
+		mask = "0"
+	}
+
+	_, err := c.connIO.Writer.WriteString("WHO " + nick + "\r\n")
+	if err != nil {
+		return err
+	}
+
+	c.connIO.Writer.Flush()
+	return nil
+}
+
+//QueryWhoWas returns the recent nicks the user has used
+func (c *Client) QueryWhoWas(nick string) error {
+	_, err := c.connIO.Writer.WriteString("WHOWAS " + nick + "\r\n")
+	if err != nil {
+		return err
+	}
+
+	c.connIO.Writer.Flush()
+	return nil
+}
+
+//whith the Who command, is whois needed?
+//QueryWhois returns informationabout the nick passed
+// func (c *Client) QueryWhois(nick string) error {
+// 	query := "WHOIS " + nick + "\r\n"
+
+// 	_, err := c.connIO.Writer.WriteString(query)
+// 	if err != nil {
+// 		log.Printf("Error with whois %s\n", err.Error())
+// 		return err
+// 	}
+
+// 	c.connIO.Writer.Flush()
+// 	return nil
+// }

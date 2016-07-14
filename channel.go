@@ -63,7 +63,7 @@ func (c *channel) connect(recv chan []byte, io *bufio.ReadWriter) error {
 func (c *channel) SendMessage(msg string) {
 	chat := "PRIVMSG " + c.chName + " :" + msg
 
-	_, err := c.writer.Write([]byte(chat))
+	_, err := c.writer.WriteString(chat)
 	if err != nil {
 		log.Printf("Channel writing error %s", err.Error())
 	}
@@ -81,7 +81,7 @@ func (c *channel) SendMessageToUser(nick, msg string) error {
 	index := sort.SearchStrings(c.nicks, nick)
 	if index < len(c.nicks) && strings.EqualFold(nick, c.nicks[index]) {
 
-		_, err := c.writer.Write([]byte("PRIVMSG " + nick + " :" + msg))
+		_, err := c.writer.WriteString("PRIVMSG " + nick + " :" + msg)
 		if err != nil {
 			return err
 		}
