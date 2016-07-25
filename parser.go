@@ -4,22 +4,22 @@ import (
 	"strings"
 )
 
-//IsPingRequest will return true if a PONG response is needed
+//IsPingRequest will return true if a PONG response is needed DELETE
 func IsPingRequest(d []byte) bool {
 	return strings.Contains(string(d), "PING :")
 }
 
-//EndOfMOTD will return true if the Message Of The Day is finished
+//EndOfMOTD will return true if the Message Of The Day is finished DELETE
 func EndOfMOTD(d []byte) bool {
 	return strings.Contains(string(d), "End of /MOTD")
 }
 
 //FormatPrivMsg will format the data given to better print the privmsg
 func FormatPrivMsg(d []byte) string {
-	tokens := strings.Split(string(d), " ")
-	user := tokens[0][1:strings.Index(tokens[0], "!")]
-	channel := tokens[2]
-	msg := strings.Join(tokens[3:], " ")
+	// tokens := strings.Split(string(d), " ")
+	// user := tokens[0][1:strings.Index(tokens[0], "!")]
+	// channel := tokens[2]
+	// msg := strings.Join(tokens[3:], " ")
 
-	return "[" + channel + "] " + user + "\t" + msg
+	return "[[chat]]: " + string(d) //"[" + channel + "] " + user + "\t" + msg
 }

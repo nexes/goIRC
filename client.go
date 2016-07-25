@@ -2,7 +2,7 @@ package goirc
 
 import (
 	"bufio"
-	// "errors"
+	"fmt"
 	"log"
 	"net"
 	"strconv"
@@ -17,14 +17,14 @@ type Client struct {
 	Server   string
 	Port     int
 	SSL      bool
-	Nick     string //user refactor to its own obj?
-	Password string //user refactor to its own obj?
+	Nick     string
+	Password string
 
 	RecvFromServer  chan []byte //receving data from a channle, e.g PRIVMSG
 	RecvFromChannel chan []byte //receving data from the server, e.g CONNECT/DISCONNECT
 
 	open        bool
-	ircChannels []channel
+	ircChannels []Channel
 
 	conn   *net.TCPConn
 	connIO *bufio.ReadWriter
@@ -38,7 +38,7 @@ func (c *Client) ConnectToServer() error {
 	if c.SSL {
 		c.Port = 6697
 	}
-	c.ircChannels = make([]channel, 0, 5)
+	c.ircChannels = make([]Channel, 0, 5)
 	c.RecvFromChannel = make(chan []byte)
 	c.RecvFromServer = make(chan []byte)
 	c.open = false
@@ -73,19 +73,19 @@ func (c *Client) IsOpen() bool {
 }
 
 //CloseConnection closes the TCP connection to the server, closes any irc channels that may be left
-func (c *Client) CloseConnection() {
-	log.Println("closed called")
+func (c *Client) CloseConnection(msg string) {
 	c.open = false
-	c.connIO.Writer.Flush()
-	// c.connIO.Reader.Discard(c.connIO.Reader.Buffered())
 
-	c.conn.Close()
-	//channels take care of them selfs?
+	_, err := c.connIO.Writer.WriteString("QUIT :" + msg + "\r\n")
+	if err != nil {
+		log.Printf("Error closing: %s", err.Error())
+	}
+	c.connIO.Writer.Flush()
 }
 
 //SendPongResponse will send a PONG response when a PING request was recieved
 func (c *Client) SendPongResponse() {
-	_, err := c.connIO.Writer.Write([]byte("PONG " + c.Server + "\r\n"))
+	_, err := c.connIO.Writer.WriteString("PONG " + c.Server + "\r\n")
 	if err != nil {
 		//return this duh
 		log.Println(err.Error())
@@ -101,27 +101,68 @@ func (c *Client) Listen() {
 	var userMsg string
 
 	if c.Password != "" {
-		userMsg = "PASS " + c.Password + "\r\nNICK " + c.Nick + "\r\nUSER " + c.Nick + " 0 * :goirc bot\r\n"
+		userMsg = fmt.Sprintf("PASS %s\r\nNICK %s\r\nUSER %s 0 * :goirc bot\r\n", c.Password, c.Nick, c.Nick)
 	} else {
-		userMsg = "NICK " + c.Nick + "\r\nUSER " + c.Nick + " 0 * :goirc bot\r\n"
+		userMsg = fmt.Sprintf("NICK %s\r\nUSER %s 0 * :goirc bot\r\n", c.Nick, c.Nick)
 	}
 
-	//need to do error handling, 400's
+	_, err := c.connIO.Write([]byte(userMsg))
+	if err != nil {
+		log.Printf("Error writing to IRC: %s", err.Error())
+	}
+	if c.connIO.Writer.Buffered() > 0 {
+		c.connIO.Flush()
+	}
+
+	//this will handle reading from the connection.
 	go func(rSrv, rChn chan []byte) {
-		// tell IRC who we are
-		_, err := c.connIO.Write([]byte(userMsg))
-		if err != nil {
-			log.Printf("Error writing to IRC: %v", err)
-		}
-		if c.connIO.Writer.Buffered() > 0 {
-			c.connIO.Flush()
-		}
+		defer c.conn.Close()
 
 		for c.open {
 			read, err := c.connIO.Reader.ReadString('\n')
 			if err != nil {
-				log.Printf("Error ConnectAndListen: %v", err)
+				log.Printf("Error ConnectAndListen: %s", err.Error())
 				break
+			}
+
+			//gets rid of the leading ":", easier to parse without this char
+			if read[0] == ':' {
+				read = read[1:]
+			}
+
+			//refactor these to their own space
+			if strings.Contains(read, "001 "+c.Nick) {
+				host := read[:strings.Index(read, " ")]
+				c.Server = host
+
+			} else if strings.Contains(read, c.Server+" 470 "+c.Nick) {
+				ch := read[len(c.Server+" 470 "+c.Nick):strings.LastIndex(read, ":")]
+				chlist := strings.Split(strings.TrimSpace(ch), " ")
+
+				for i, v := range c.ircChannels {
+					if v.chName == chlist[0] {
+						c.ircChannels[i].chName = chlist[len(chlist)-1]
+						break
+					}
+				}
+
+			} else if strings.Contains(read, c.Server+" 332 "+c.Nick) {
+				topic := read[strings.Index(read, ":")+1:]
+				ch := read[strings.Index(read, "#"):strings.Index(read, ":")]
+
+				for i, v := range c.ircChannels {
+					if strings.Contains(ch, v.chName) {
+						c.ircChannels[i].topic = topic
+						break
+					}
+				}
+
+			} else if strings.Contains(read, c.Server+" 353 "+c.Nick) {
+				nick := read[strings.Index(read, ":")+1:]
+				nicklist := strings.Split(nick, " ")
+				chn := &c.ircChannels[len(c.ircChannels)-1] //get the last one added
+
+				chn.nicks = append(chn.nicks, nicklist...)
 			}
 
 			//this is a cheap hack, you need a better way to know if its a prvmsg
@@ -134,31 +175,31 @@ func (c *Client) Listen() {
 	}(c.RecvFromServer, c.RecvFromChannel)
 }
 
-//ConnectToChannel connects to a channel, returns an error if already connected
-func (c *Client) ConnectToChannel(chName string) error {
+//JoinChannel connects to a channel, returns an error if already connected
+func (c *Client) JoinChannel(chName string) (*Channel, error) {
 	if chName[0] != '#' {
 		chName = "#" + chName
 	}
 
-	nc := channel{
-		chName:    chName,
+	nc := Channel{
+		chName:    strings.TrimSpace(chName),
 		username:  c.Nick,
 		connected: false,
 		active:    false,
-		nicks:     make([]string, 0, 100),
+		nicks:     make([]string, 0, 200),
 	}
 
-	err := nc.connect(c.RecvFromChannel, c.connIO)
+	err := nc.connect(c.connIO)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	c.ircChannels = append(c.ircChannels, nc)
-	return nil
+	return &nc, nil
 }
 
-//DisconnectFromChannel disconnects from a channel, returns an error if not connected to that channel
-func (c *Client) DisconnectFromChannel(ch *channel, msg string) error {
+//LeaveChannel disconnects from a channel, returns an error if not connected to that channel
+func (c *Client) LeaveChannel(ch *Channel, msg string) error {
 	ch.connected = false
 
 	_, err := c.connIO.Writer.WriteString("PART " + ch.chName + " :" + msg + "\r\n")
@@ -167,25 +208,23 @@ func (c *Client) DisconnectFromChannel(ch *channel, msg string) error {
 	}
 	c.connIO.Writer.Flush()
 
-	for _, v := range c.ircChannels {
+	for index, v := range c.ircChannels {
 		if v.chName == ch.chName {
-			log.Printf("found channel to part, %s", ch.chName)
-			break
+			if index > 0 {
+				c.ircChannels = append(c.ircChannels[:index], c.ircChannels[index+1:]...)
+
+			} else if index == 0 {
+				c.ircChannels = []Channel{}
+			}
 		}
 	}
-
-	// //make sure this is working
-	// if index >= 0 {
-	// 	c.ircChannels = append(c.ircChannels[:index], c.ircChannels[index+1:]...)
-	// }
-
 	return nil
 }
 
 //GetChannel will return the channel object if one exists for the channel name given
-func (c *Client) GetChannel(name string) *channel {
+func (c *Client) GetChannel(name string) *Channel {
 	for _, ch := range c.ircChannels {
-		if strings.Contains(ch.chName, name) { // == ?
+		if strings.Contains(ch.chName, strings.TrimSpace(name)) {
 			return &ch
 		}
 	}
@@ -221,7 +260,10 @@ func (c *Client) QueryWho(nick, mask string) error {
 		return err
 	}
 
-	c.connIO.Writer.Flush()
+	if c.connIO.Writer.Buffered() > 0 {
+		c.connIO.Writer.Flush()
+	}
+
 	return nil
 }
 
@@ -232,21 +274,9 @@ func (c *Client) QueryWhoWas(nick string) error {
 		return err
 	}
 
-	c.connIO.Writer.Flush()
+	if c.connIO.Writer.Buffered() > 0 {
+		c.connIO.Writer.Flush()
+	}
+
 	return nil
 }
-
-//whith the Who command, is whois needed?
-//QueryWhois returns informationabout the nick passed
-// func (c *Client) QueryWhois(nick string) error {
-// 	query := "WHOIS " + nick + "\r\n"
-
-// 	_, err := c.connIO.Writer.WriteString(query)
-// 	if err != nil {
-// 		log.Printf("Error with whois %s\n", err.Error())
-// 		return err
-// 	}
-
-// 	c.connIO.Writer.Flush()
-// 	return nil
-// }
