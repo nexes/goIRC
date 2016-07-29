@@ -167,7 +167,8 @@ func (c *Client) Listen() {
 
 			//this is a cheap hack, you need a better way to know if its a prvmsg
 			if strings.Contains(read, "PRIVMSG #") {
-				rChn <- []byte(read)
+				msg := FormatPrivMsg(read)
+				rChn <- []byte(msg)
 			} else {
 				rSrv <- []byte(read)
 			}
@@ -234,15 +235,33 @@ func (c *Client) GetChannel(name string) *Channel {
 //ChangeNick change your current NICK
 func (c *Client) ChangeNick(nick string) error {
 	if c.Nick != nick {
-		c.Nick = nick
+		c.Nick = strings.TrimSpace(nick)
+	}
+
+	//update the new nick with all open channels
+	for _, v := range c.ircChannels {
+		v.username = c.Nick
 	}
 
 	_, err := c.connIO.Writer.WriteString("NICK " + c.Nick + "\r\n")
 	if err != nil {
 		return err
 	}
+	if c.connIO.Writer.Buffered() > 0 {
+		c.connIO.Writer.Flush()
+	}
+	return nil
+}
 
-	//do we need all these
+//IdentifyNick sends the NickServ identify command to the server to register the nick
+func (c *Client) IdentifyNick(pass string) error {
+	msg := "/msg NickServ identify " + pass + "\r\n"
+
+	_, err := c.connIO.Writer.WriteString(msg)
+	if err != nil {
+		return err
+	}
+
 	if c.connIO.Writer.Buffered() > 0 {
 		c.connIO.Writer.Flush()
 	}

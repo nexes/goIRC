@@ -59,6 +59,7 @@ func (c *Channel) SendMessageToUser(nick, msg string) error {
 	if !sort.StringsAreSorted(c.nicks) {
 		sort.Strings(c.nicks)
 	}
+
 	index := sort.SearchStrings(c.nicks, nick)
 	if index < len(c.nicks) && strings.EqualFold(nick, c.nicks[index]) {
 
@@ -70,7 +71,6 @@ func (c *Channel) SendMessageToUser(nick, msg string) error {
 		if c.writer.Buffered() > 0 {
 			c.writer.Flush()
 		}
-
 		return nil
 	}
 	return errors.New("Nick " + nick + " wasn't found to send a message to")
@@ -97,8 +97,7 @@ func (c *Channel) Topic() string {
 //you will need to update this list when users join/quit
 func (c *Channel) updateNickList(data string) {
 	nicks := strings.Split(data, " ")
-	c.nicks = append(c.nicks, nicks[0:]...)
 
-	//check for duplicates
+	c.nicks = append(c.nicks, nicks[0:]...)
 	sort.Strings(c.nicks)
 }
