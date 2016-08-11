@@ -20,8 +20,10 @@ type Client struct {
 	Nick     string
 	Password string
 
-	RecvFromServer  chan []byte //receving data from a channle, e.g PRIVMSG
-	RecvFromChannel chan []byte //receving data from the server, e.g CONNECT/DISCONNECT
+	serverChan  chan map[string]string //receving data from a channle, e.g PRIVMSG
+	roomChan    chan map[string]string //receving data from the server, e.g CONNECT/DISCONNECT
+	messageChan chan map[string]string //receving data from the channela,
+	quitChan    chan bool              //receive quit command
 
 	open        bool
 	ircChannels []Channel
@@ -39,8 +41,10 @@ func (c *Client) ConnectToServer() error {
 		c.Port = 6697
 	}
 	c.ircChannels = make([]Channel, 0, 5)
-	c.RecvFromChannel = make(chan []byte)
-	c.RecvFromServer = make(chan []byte)
+	c.roomChan = make(chan map[string]string)
+	c.serverChan = make(chan map[string]string)
+	c.messageChan = make(chan map[string]string)
+	c.quitChan = make(chan bool)
 	c.open = false
 
 	raddrString := net.JoinHostPort(c.Server, strconv.Itoa(c.Port))
@@ -115,7 +119,7 @@ func (c *Client) Listen() {
 	}
 
 	//this will handle reading from the connection.
-	go func(rSrv, rChn chan []byte) {
+	go func(rChan, sChan, mChan chan<- map[string]string) {
 		defer c.conn.Close()
 
 		for c.open {
@@ -130,50 +134,81 @@ func (c *Client) Listen() {
 				read = read[1:]
 			}
 
-			//refactor these to their own space
-			if strings.Contains(read, "001 "+c.Nick) {
-				host := read[:strings.Index(read, " ")]
-				c.Server = host
+			if strings.Contains(read, "PING :"+c.Server) {
+				sChan <- map[string]string{
+					"ID":     "000",
+					"IDName": "PING",
+					"Host":   c.Server,
+				}
+
+			} else if strings.Contains(read, "001 "+c.Nick) {
+				sChan <- map[string]string{
+					"ID":     "001",
+					"IDName": "RPL_WELCOME",
+					"Host":   read[:strings.Index(read, " ")],
+				}
 
 			} else if strings.Contains(read, c.Server+" 470 "+c.Nick) {
 				ch := read[len(c.Server+" 470 "+c.Nick):strings.LastIndex(read, ":")]
 				chlist := strings.Split(strings.TrimSpace(ch), " ")
 
-				for i, v := range c.ircChannels {
-					if v.chName == chlist[0] {
-						c.ircChannels[i].chName = chlist[len(chlist)-1]
-						break
-					}
+				rChan <- map[string]string{
+					"ID":      "470",
+					"IDName":  "RPL_CHANNELNAME",
+					"Oldname": chlist[0],
+					"Newname": chlist[len(chlist)-1],
 				}
 
 			} else if strings.Contains(read, c.Server+" 332 "+c.Nick) {
-				topic := read[strings.Index(read, ":")+1:]
-				ch := read[strings.Index(read, "#"):strings.Index(read, ":")]
-
-				for i, v := range c.ircChannels {
-					if strings.Contains(ch, v.chName) {
-						c.ircChannels[i].topic = topic
-						break
-					}
+				log.Println(read)
+				rChan <- map[string]string{
+					"ID":      "332",
+					"IDName":  "RPL_TOPIC",
+					"Channel": "something",
+					"Topic":   read[strings.Index(read, "#"):strings.Index(read, ":")],
 				}
 
 			} else if strings.Contains(read, c.Server+" 353 "+c.Nick) {
-				nick := read[strings.Index(read, ":")+1:]
-				nicklist := strings.Split(nick, " ")
-				chn := &c.ircChannels[len(c.ircChannels)-1] //get the last one added
+				rChan <- map[string]string{
+					"ID":      "353",
+					"IDName":  "RPL_NAMEPLY",
+					"Channel": c.ircChannels[len(c.ircChannels)-1].Name,
+					"Nicks":   read[strings.Index(read, ":")+1:],
+				}
 
-				chn.nicks = append(chn.nicks, nicklist...)
-			}
-
-			//this is a cheap hack, you need a better way to know if its a prvmsg
-			if strings.Contains(read, "PRIVMSG #") {
-				msg := FormatPrivMsg(read)
-				rChn <- []byte(msg)
 			} else {
-				rSrv <- []byte(read)
+				//this is a cheap hack, you need a better way to know if its a prvmsg
+				if strings.Contains(read, "PRIVMSG #") {
+					mChan <- map[string]string{
+						"IDName": "PRIVMSG",
+						"MSG":    read,
+					}
+
+				} else {
+					sChan <- map[string]string{
+						"ID":   "999",
+						"Host": c.Server,
+						"MSG":  read,
+					}
+				}
 			}
 		}
-	}(c.RecvFromServer, c.RecvFromChannel)
+	}(c.roomChan, c.serverChan, c.messageChan)
+}
+
+//RecvServerMessage ss
+func (c *Client) RecvServerMessage() <-chan map[string]string {
+	return c.serverChan
+}
+
+//RecvChannelMessage ss
+func (c *Client) RecvChannelMessage() <-chan map[string]string {
+	return c.roomChan
+}
+
+//RecvPrivMessage ss
+func (c *Client) RecvPrivMessage() <-chan map[string]string {
+	return c.messageChan
 }
 
 //JoinChannel connects to a channel, returns an error if already connected
@@ -183,11 +218,11 @@ func (c *Client) JoinChannel(chName string) (*Channel, error) {
 	}
 
 	nc := Channel{
-		chName:    strings.TrimSpace(chName),
+		Name:      strings.TrimSpace(chName),
 		username:  c.Nick,
 		connected: false,
 		active:    false,
-		nicks:     make([]string, 0, 200),
+		Nicks:     make([]string, 0, 200),
 	}
 
 	err := nc.connect(c.connIO)
@@ -203,14 +238,14 @@ func (c *Client) JoinChannel(chName string) (*Channel, error) {
 func (c *Client) LeaveChannel(ch *Channel, msg string) error {
 	ch.connected = false
 
-	_, err := c.connIO.Writer.WriteString("PART " + ch.chName + " :" + msg + "\r\n")
+	_, err := c.connIO.Writer.WriteString("PART " + ch.Name + " :" + msg + "\r\n")
 	if err != nil {
 		return err
 	}
 	c.connIO.Writer.Flush()
 
 	for index, v := range c.ircChannels {
-		if v.chName == ch.chName {
+		if v.Name == ch.Name {
 			if index > 0 {
 				c.ircChannels = append(c.ircChannels[:index], c.ircChannels[index+1:]...)
 
@@ -225,7 +260,7 @@ func (c *Client) LeaveChannel(ch *Channel, msg string) error {
 //GetChannel will return the channel object if one exists for the channel name given
 func (c *Client) GetChannel(name string) *Channel {
 	for _, ch := range c.ircChannels {
-		if strings.Contains(ch.chName, strings.TrimSpace(name)) {
+		if strings.Contains(ch.Name, strings.TrimSpace(name)) {
 			return &ch
 		}
 	}
@@ -253,7 +288,7 @@ func (c *Client) ChangeNick(nick string) error {
 	return nil
 }
 
-//IdentifyNick sends the NickServ identify command to the server to register the nick
+//IdentifyNick sends the NickServ identify command to the server to register the nick, is this right?????
 func (c *Client) IdentifyNick(pass string) error {
 	msg := "/msg NickServ identify " + pass + "\r\n"
 
