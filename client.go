@@ -140,15 +140,41 @@ func (c *Client) Listen() {
 					"IDName": "PING",
 					"Host":   c.Server,
 				}
+			}
 
-			} else if strings.Contains(read, "001 "+c.Nick) {
+			switch getResponseID(read) {
+			case 001:
 				sChan <- map[string]string{
 					"ID":     "001",
 					"IDName": "RPL_WELCOME",
 					"Host":   read[:strings.Index(read, " ")],
 				}
 
-			} else if strings.Contains(read, c.Server+" 470 "+c.Nick) {
+			case 332:
+				rChan <- map[string]string{
+					"ID":      "332",
+					"IDName":  "RPL_TOPIC",
+					"Channel": read[strings.Index(read, "#"):strings.Index(read, ":")],
+					"Topic":   read[strings.Index(read, ":")+1:],
+				}
+
+			case 353:
+				rChan <- map[string]string{
+					"ID":      "353",
+					"IDName":  "RPL_NAMEPLY",
+					"Channel": c.ircChannels[len(c.ircChannels)-1].Name,
+					"Nicks":   read[strings.Index(read, ":")+1:],
+				}
+
+			case 372:
+				sChan <- map[string]string{
+					"ID":     "372",
+					"IDName": "RPL_MOTD",
+					"Host":   c.Server,
+					"MOTD":   read[strings.Index(read, ":")+1:],
+				}
+
+			case 470:
 				ch := read[len(c.Server+" 470 "+c.Nick):strings.LastIndex(read, ":")]
 				chlist := strings.Split(strings.TrimSpace(ch), " ")
 
@@ -159,25 +185,12 @@ func (c *Client) Listen() {
 					"Newname": chlist[len(chlist)-1],
 				}
 
-			} else if strings.Contains(read, c.Server+" 332 "+c.Nick) {
-				log.Println(read)
-				rChan <- map[string]string{
-					"ID":      "332",
-					"IDName":  "RPL_TOPIC",
-					"Channel": "something",
-					"Topic":   read[strings.Index(read, "#"):strings.Index(read, ":")],
+			default:
+				if change, evt, nick := checkChannelNicks(read); change {
+					//TODO need to update the nick list found in that Channel object
+					fmt.Printf("User %s has %s\n", nick, evt)
 				}
 
-			} else if strings.Contains(read, c.Server+" 353 "+c.Nick) {
-				rChan <- map[string]string{
-					"ID":      "353",
-					"IDName":  "RPL_NAMEPLY",
-					"Channel": c.ircChannels[len(c.ircChannels)-1].Name,
-					"Nicks":   read[strings.Index(read, ":")+1:],
-				}
-
-			} else {
-				//this is a cheap hack, you need a better way to know if its a prvmsg
 				if strings.Contains(read, "PRIVMSG #") {
 					mChan <- map[string]string{
 						"IDName": "PRIVMSG",
