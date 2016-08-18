@@ -86,6 +86,28 @@ func (c *Channel) Topic() string {
 	return "No Topic was set"
 }
 
+//AddNick add a new nick to the channels list of nicks
+func (c *Channel) AddNick(nick string) {
+	c.nickListLock.Lock()
+	defer c.nickListLock.Unlock()
+
+	c.Nicks = append(c.Nicks, nick)
+	sort.Strings(c.Nicks)
+}
+
+//RemoveNick removes a nick from the channels list of nicks
+func (c *Channel) RemoveNick(nick string) {
+	c.nickListLock.Lock()
+	defer c.nickListLock.Unlock()
+
+	for k, v := range c.Nicks {
+		if strings.EqualFold(v, nick) {
+			c.Nicks = append(c.Nicks[:k], c.Nicks[k+1:]...)
+			break
+		}
+	}
+}
+
 //you will need to update this list when users join/quit
 func (c *Channel) updateNickList(data string) {
 	c.nickListLock.Lock()

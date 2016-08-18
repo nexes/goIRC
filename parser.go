@@ -30,14 +30,13 @@ func getResponseID(line string) int {
 	if i, err := strconv.Atoi(token[1]); err == nil {
 		return i
 	}
-
 	//if not found return 999
 	return 999
 }
 
 //this is called to check if there has been a JOIN QUIT CHANGE event for a user
 //function name may change
-func checkChannelNicks(line string) (change bool, event, user string) {
+func checkChannelNicks(line string) (change bool, event, user, channel string) {
 	token := strings.Split(line, " ")
 	change = false
 
@@ -45,11 +44,13 @@ func checkChannelNicks(line string) (change bool, event, user string) {
 		event = "quit"
 		user = token[0][:strings.Index(token[0], "!")]
 		change = true
+		channel = "i donts know"
 
 	} else if strings.EqualFold(token[1], "join") {
 		event = "join"
 		user = token[0][:strings.Index(token[0], "!")]
 		change = true
+		channel = token[len(token)-1]
 	}
 	return
 }

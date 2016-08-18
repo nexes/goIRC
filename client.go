@@ -186,9 +186,22 @@ func (c *Client) Listen() {
 				}
 
 			default:
-				if change, evt, nick := checkChannelNicks(read); change {
-					//TODO need to update the nick list found in that Channel object
-					fmt.Printf("User %s has %s\n", nick, evt)
+				if change, evt, nick, channel := checkChannelNicks(read); change {
+					if strings.EqualFold(evt, "join") {
+						rChan <- map[string]string{
+							"ID":      "888",
+							"IDName":  "RPL_NICKJOIN",
+							"Nick":    nick,
+							"Channel": channel,
+						}
+
+					} else if strings.EqualFold(evt, "quit") {
+						rChan <- map[string]string{
+							"ID":     "777",
+							"IDName": "RPL_NICKQUIT",
+							"Nick":   nick,
+						}
+					}
 				}
 
 				if strings.Contains(read, "PRIVMSG #") {
