@@ -44,7 +44,7 @@ func (c *Channel) connect(io *bufio.ReadWriter) error {
 
 //SendMessage send a message to the channel
 func (c *Channel) SendMessage(msg string) {
-	chat := "PRIVMSG " + c.Name + " :" + msg
+	chat := "PRIVMSG " + c.Name + " :" + msg + "\r\n"
 
 	_, err := c.writer.WriteString(chat)
 	if err != nil {

@@ -182,8 +182,8 @@ func (c *Client) Listen() {
 				rChan <- map[string]string{
 					"ID":      "470",
 					"IDName":  "RPL_CHANNELNAME",
-					"Oldname": chlist[0],
-					"Newname": chlist[len(chlist)-1],
+					"OldName": chlist[0],
+					"NewName": chlist[len(chlist)-1],
 				}
 
 			default:
@@ -198,13 +198,13 @@ func (c *Client) Listen() {
 
 					} else if strings.EqualFold(evt, "quit") {
 						rChan <- map[string]string{
-							"ID":     "777",
+							"ID":     "887",
 							"IDName": "RPL_NICKQUIT",
 							"Nick":   nick,
 						}
 					} else if strings.EqualFold(evt, "nick") {
 						rChan <- map[string]string{
-							"ID":      "666",
+							"ID":      "886",
 							"IDName":  "RPL_NICKCHANGE",
 							"OldNick": nick[:strings.Index(nick, " ")],
 							"NewNick": nick[strings.Index(nick, " ")+1:],
@@ -213,16 +213,22 @@ func (c *Client) Listen() {
 				}
 
 				if strings.Contains(read, "PRIVMSG #") {
+					tokens := strings.SplitN(read, " ", 4)
+
 					mChan <- map[string]string{
-						"IDName": "PRIVMSG",
-						"MSG":    read,
+						"ID":      "785",
+						"IDName":  "RPL_PRIVMSG",
+						"Nick":    tokens[0][:strings.Index(tokens[0], "!")],
+						"Channel": tokens[2],
+						"MSG":     tokens[3][1:], //removing the leading ":"
 					}
 
 				} else {
 					sChan <- map[string]string{
-						"ID":   "999",
-						"Host": c.Server,
-						"MSG":  read,
+						"ID":     "784",
+						"IDName": "CATCH",
+						"Host":   c.Server,
+						"MSG":    read,
 					}
 				}
 			}
