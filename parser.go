@@ -51,6 +51,18 @@ func checkChannelNicks(line string) (change bool, event, user, channel string) {
 		user = token[0][:strings.Index(token[0], "!")]
 		change = true
 		channel = token[len(token)-1]
+
+	} else if strings.EqualFold(token[1], "nick") {
+		nicks := []string{
+			//old nick
+			token[0][:strings.Index(token[0], "!")],
+			//new nick
+			token[2],
+		}
+		change = true
+		event = "nick"
+		channel = "i donts know"
+		user = strings.Join(nicks, " ")
 	}
 	return
 }

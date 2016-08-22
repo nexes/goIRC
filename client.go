@@ -142,6 +142,7 @@ func (c *Client) Listen() {
 				}
 			}
 
+			// I dont like long switch statements, refactor
 			switch getResponseID(read) {
 			case 001:
 				sChan <- map[string]string{
@@ -186,7 +187,7 @@ func (c *Client) Listen() {
 				}
 
 			default:
-				if change, evt, nick, channel := checkChannelNicks(read); change {
+				if didChange, evt, nick, channel := checkChannelNicks(read); didChange {
 					if strings.EqualFold(evt, "join") {
 						rChan <- map[string]string{
 							"ID":      "888",
@@ -200,6 +201,13 @@ func (c *Client) Listen() {
 							"ID":     "777",
 							"IDName": "RPL_NICKQUIT",
 							"Nick":   nick,
+						}
+					} else if strings.EqualFold(evt, "nick") {
+						rChan <- map[string]string{
+							"ID":      "666",
+							"IDName":  "RPL_NICKCHANGE",
+							"OldNick": nick[:strings.Index(nick, " ")],
+							"NewNick": nick[strings.Index(nick, " ")+1:],
 						}
 					}
 				}
