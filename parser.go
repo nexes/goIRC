@@ -5,13 +5,6 @@ import (
 	"strings"
 )
 
-//IsPingRequest will return true if a PONG response is needed DELETE
-//msg: send the data to see if its a ping
-//server: the server you are connected to that the ping request would come from
-func IsPingRequest(msg, server string) bool {
-	return strings.Contains(msg, "PING : "+server)
-}
-
 //FormatPrivMsg will format the data given to better print the privmsg
 func FormatPrivMsg(d string) string {
 	tokens := strings.Split(d, " ")
