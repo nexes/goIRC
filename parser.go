@@ -1,18 +1,14 @@
 package goirc
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 )
 
 //FormatPrivMsg will format the data given to better print the privmsg
-func FormatPrivMsg(d string) string {
-	tokens := strings.Split(d, " ")
-	user := tokens[0][:strings.Index(tokens[0], "!")]
-	channel := tokens[2]
-	msg := strings.Join(tokens[3:], " ")
-
-	return channel + "| " + user + " > \t" + msg[1:]
+func FormatPrivMsg(ch, nick, msg string) string {
+	return fmt.Sprintf("[%s] %s | %s", ch, nick, msg)
 }
 
 //most server responses will be of the format, [server name:string][ID:int][stuff:string]
