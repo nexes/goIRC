@@ -17,7 +17,6 @@ type Channel struct {
 	topic     string
 	username  string
 	connected bool
-	active    bool //this the active channel the user is typing in (needed?)
 
 	nickListLock *sync.Mutex
 	writer       *bufio.Writer

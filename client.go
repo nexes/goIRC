@@ -134,14 +134,6 @@ func (c *Client) Listen() {
 				read = read[1:]
 			}
 
-			if strings.Contains(read, "PING :"+c.Server) {
-				sChan <- map[string]string{
-					"ID":     "000",
-					"IDName": "PING",
-					"Host":   c.Server,
-				}
-			}
-
 			// I dont like long switch statements, refactor
 			switch getResponseID(read) {
 			case 001:
@@ -221,7 +213,14 @@ func (c *Client) Listen() {
 					}
 				}
 
-				if strings.Contains(read, "PRIVMSG #") {
+				if strings.Contains(read, "PING :"+c.Server) {
+					sChan <- map[string]string{
+						"ID":     "000",
+						"IDName": "PING",
+						"Host":   c.Server,
+					}
+
+				} else if strings.Contains(read, "PRIVMSG #") {
 					tokens := strings.SplitN(read, " ", 4)
 
 					mChan <- map[string]string{
@@ -270,7 +269,6 @@ func (c *Client) JoinChannel(chName string) (*Channel, error) {
 		Name:      strings.TrimSpace(chName),
 		username:  c.Nick,
 		connected: false,
-		active:    false,
 		Nicks:     make([]string, 0, 200),
 	}
 

@@ -72,7 +72,7 @@ func main() {
 
 		case fromMessage := <-client.RecvPrivMessage():
 			if strings.EqualFold(fromMessage["IDName"], "rpl_privmsg") {
-				fmt.Printf("[%s] %s | %s", fromMessage["Channel"], fromMessage["Nick"], fromMessage["MSG"])
+				fmt.Printf(goirc.FormatPrivMsg(fromMessage["Channel"], fromMessage["Nick"], fromMessage["MSG"]))
 
 			} else {
 				fmt.Println(fromMessage["IDName"])
