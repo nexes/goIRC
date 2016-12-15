@@ -145,6 +145,8 @@ func (c *Client) Listen() {
 			// I dont like long switch statements, refactor
 			switch getResponseID(read) {
 			case 001:
+				c.Server = read[:strings.Index(read, " ")]
+
 				sChan <- map[string]string{
 					"ID":     "001",
 					"IDName": "RPL_WELCOME",
@@ -178,6 +180,13 @@ func (c *Client) Listen() {
 			case 470:
 				ch := read[len(c.Server+" 470 "+c.Nick):strings.LastIndex(read, ":")]
 				chlist := strings.Split(strings.TrimSpace(ch), " ")
+
+				//update channel name to the new name e.g #programming to ##programming
+				for index, value := range c.ircChannels {
+					if value.Name == chlist[0] {
+						c.ircChannels[index].Name = chlist[len(chlist)-1]
+					}
+				}
 
 				rChan <- map[string]string{
 					"ID":      "470",
