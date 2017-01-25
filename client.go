@@ -199,9 +199,10 @@ func (c *Client) Listen() {
 
 					} else if strings.EqualFold(evt, "quit") {
 						rChan <- map[string]string{
-							"ID":     "887",
-							"IDName": "RPL_NICKQUIT",
-							"Nick":   nick,
+							"ID":      "887",
+							"IDName":  "RPL_NICKQUIT",
+							"Nick":    nick,
+							"Channel": channel,
 						}
 					} else if strings.EqualFold(evt, "nick") {
 						rChan <- map[string]string{
@@ -209,6 +210,7 @@ func (c *Client) Listen() {
 							"IDName":  "RPL_NICKCHANGE",
 							"OldNick": nick[:strings.Index(nick, " ")],
 							"NewNick": nick[strings.Index(nick, " ")+1:],
+							"Channel": channel,
 						}
 					}
 				}
