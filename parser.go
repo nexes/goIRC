@@ -33,7 +33,7 @@ func checkChannelNicks(line string) (change bool, event, user, channel string) {
 		event = "quit"
 		user = token[0][:strings.Index(token[0], "!")]
 		change = true
-		channel = "i donts know"
+		channel = "" //channel isn't given from IRC when a user quits
 
 	} else if strings.EqualFold(token[1], "join") {
 		event = "join"
@@ -50,7 +50,7 @@ func checkChannelNicks(line string) (change bool, event, user, channel string) {
 		}
 		change = true
 		event = "nick"
-		channel = "i donts know"
+		channel = "" //channel isn't give from IRC when a user changes nick
 		user = strings.Join(nicks, " ")
 	}
 	return
