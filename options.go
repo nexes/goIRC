@@ -1,3 +1,0 @@
-package goirc
-
-//cli options
