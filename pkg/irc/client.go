@@ -26,7 +26,7 @@ type Client struct {
 	server           Server
 	callbackHandlers map[string]eventFunc
 
-	rw         *bufio.ReadWriter
+	readWriter *bufio.ReadWriter
 	connection net.Conn
 }
 
@@ -69,8 +69,12 @@ func (c *Client) Connect(ctx context.Context) error {
 	}
 
 	c.connection = conn
-	c.rw = bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+	c.readWriter = bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
 
-	c.callbackHandlers[EventConnect]()
+	callback, ok := c.callbackHandlers[EventConnect]
+	if ok {
+		callback()
+	}
+
 	return nil
 }
