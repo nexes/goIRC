@@ -8,24 +8,28 @@ import (
 	"net"
 )
 
-type eventFunc func()
-
 const (
 	EventPing       = "PING"
 	EventConnect    = "CONNECT"
 	EventDisconnect = "DISCONNECT"
+	EventError      = "ERROR"
 	EventRoomJoin   = "ROOMJOIN"
 	EventRoomLeave  = "ROOMLEAVE"
-
-	eventCount = 5
 )
+
+type EventType struct {
+	Message string
+	Err     error
+}
+
+type EventCallback func(EventType)
 
 //Client object describing the irc connection
 type Client struct {
 	UserName         string
 	IRCServer        string
 	server           Server
-	callbackHandlers map[string]eventFunc
+	callbackHandlers map[string]EventCallback
 
 	readWriter *bufio.ReadWriter
 	connection net.Conn
@@ -36,30 +40,33 @@ func NewClient(nick, serverName string) *Client {
 	return &Client{
 		UserName:         nick,
 		IRCServer:        serverName,
-		callbackHandlers: make(map[string]eventFunc, eventCount),
+		callbackHandlers: make(map[string]EventCallback),
 		server:           NewIRCServer(serverName, false),
 	}
 }
 
 //HandleEventFunc handle event callbacks
-func (c *Client) HandleEventFunc(event string, f eventFunc) {
-	c.callbackHandlers[event] = f
+func (c *Client) HandleEventFunc(event string, cb EventCallback) {
+	c.callbackHandlers[event] = cb
 }
 
 //Connect connect to the irc server supplied in the Client object
 func (c *Client) Connect(ctx context.Context) {
 	dialer := net.Dialer{}
 	dialer.Timeout = c.server.Timeout
+	connectCtx, cancel := context.WithCancel(ctx)
 
-	conn, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", c.server.ServerName, c.server.Port))
+	conn, err := dialer.DialContext(connectCtx, "tcp", fmt.Sprintf("%s:%d", c.server.ServerName, c.server.Port))
 	if err != nil {
 		callback, ok := c.callbackHandlers[EventDisconnect]
 		if ok {
-			callback()
+			callback(EventType{
+				Err: err,
+			})
 		}
 
 		c.server.close()
-		ctx.Done()
+		cancel()
 		return
 	}
 
@@ -68,10 +75,10 @@ func (c *Client) Connect(ctx context.Context) {
 
 	callback, ok := c.callbackHandlers[EventConnect]
 	if ok {
-		callback()
+		callback(EventType{})
 	}
 
-	c.server.start(ctx, c.readWriter)
+	c.server.start(connectCtx, c.readWriter)
 	for {
 		select {
 		case line := <-c.server.recvChan:
@@ -81,19 +88,27 @@ func (c *Client) Connect(ctx context.Context) {
 			log.Println("ping received ", ping)
 			callback, ok := c.callbackHandlers[EventPing]
 			if ok {
-				callback()
+				callback(EventType{})
+			}
+
+		case err := <-c.server.errChan:
+			log.Println("server error: ", err.Error())
+			callback, ok := c.callbackHandlers[EventError]
+			if ok {
+				callback(EventType{
+					Err: err,
+				})
 			}
 
 		case <-ctx.Done():
-			// todo cleanup
-			log.Println("context done()")
-			c.server.close()
-
+			log.Println("client connect context done()")
 			callback, ok := c.callbackHandlers[EventDisconnect]
 			if ok {
-				callback()
+				callback(EventType{})
 			}
 
+			c.server.close()
+			cancel()
 			return
 		}
 	}
