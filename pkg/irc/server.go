@@ -3,8 +3,11 @@ package irc
 import (
 	"bufio"
 	"context"
+	"errors"
+	"fmt"
 	"io"
 	"log"
+	"net"
 	"sync"
 	"time"
 )
@@ -19,8 +22,12 @@ type Server struct {
 	Timeout  time.Duration
 	PingFreq time.Duration
 
+	readWriter *bufio.ReadWriter
+	conn       net.Conn
+
 	wg       sync.WaitGroup
 	recvChan chan string
+	errChan  chan error
 	pingChan chan string
 }
 
@@ -31,56 +38,85 @@ func NewIRCServer(server string, useTLS bool) Server {
 		Port:       6667,
 		UseTSL:     useTLS,
 		running:    false,
-		Timeout:    time.Second * 60,
-		PingFreq:   time.Minute * 2,
-		recvChan:   make(chan string),
-		pingChan:   make(chan string),
+
+		Timeout:  time.Minute * 3,
+		PingFreq: time.Minute * 2,
+
+		// make buffered
+		recvChan: make(chan string),
+		errChan:  make(chan error),
+		pingChan: make(chan string),
 	}
 }
 
-func (s *Server) start(ctx context.Context, rw *bufio.ReadWriter) {
+func (s *Server) start(ctx context.Context) error {
 	if !s.running {
 		s.running = true
 
+		dialer := net.Dialer{
+			Timeout: s.Timeout,
+		}
+
+		conn, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", s.ServerName, s.Port))
+		if err != nil {
+			s.running = false
+			return err
+		}
+
+		s.conn = conn
+		s.readWriter = bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+
 		s.wg.Add(3)
-		go s.recv(ctx, rw)
-		go s.send(ctx, rw)
-		go s.sendPingResponse(ctx, rw)
+		go s.recv(ctx)
+		go s.send(ctx)
+		go s.sendPingResponse(ctx)
+
+		return nil
 	}
+
+	return errors.New("Calling start on a running server")
 }
 
-func (s *Server) recv(ctx context.Context, rw *bufio.ReadWriter) {
+func (s *Server) recv(ctx context.Context) {
 	defer s.wg.Done()
 
 	for {
-		data, err := rw.ReadString('\n')
+		data, err := s.readWriter.ReadString('\n')
 		if err != nil {
 			if err == io.EOF {
-				log.Println("eof error, closing connection ", err)
-				ctx.Done()
+				log.Println("EOF: closing connection ", err)
+				s.errChan <- err
+
 				return
 			}
-			// TODO
-			log.Println("recv error ", err)
-			break
+
+			s.errChan <- err
 		}
 
+		// TODO: parse the input type
 		s.recvChan <- data
 	}
 }
 
-func (s *Server) send(ctx context.Context, rw *bufio.ReadWriter) {
+func (s *Server) send(ctx context.Context) {
 	defer s.wg.Done()
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("send ctx.Done called")
+			return
+		}
+	}
 }
 
-func (s *Server) sendPingResponse(ctx context.Context, rw *bufio.ReadWriter) {
+func (s *Server) sendPingResponse(ctx context.Context) {
 	ticker := time.NewTicker(s.PingFreq)
 	defer s.wg.Done()
 
 	for {
 		select {
 		case <-ticker.C:
-			// TODO
 			log.Println("sending ping")
 			s.pingChan <- "all done with ping"
 
@@ -96,4 +132,5 @@ func (s *Server) close() {
 	// todo
 	close(s.pingChan)
 	close(s.recvChan)
+	close(s.errChan)
 }

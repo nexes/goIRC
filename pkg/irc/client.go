@@ -1,11 +1,8 @@
 package irc
 
 import (
-	"bufio"
 	"context"
-	"fmt"
 	"log"
-	"net"
 )
 
 const (
@@ -30,9 +27,6 @@ type Client struct {
 	IRCServer        string
 	server           Server
 	callbackHandlers map[string]EventCallback
-
-	readWriter *bufio.ReadWriter
-	connection net.Conn
 }
 
 //NewClient new client object with a defaut server setup
@@ -52,33 +46,31 @@ func (c *Client) HandleEventFunc(event string, cb EventCallback) {
 
 //Connect connect to the irc server supplied in the Client object
 func (c *Client) Connect(ctx context.Context) {
-	dialer := net.Dialer{}
-	dialer.Timeout = c.server.Timeout
 	connectCtx, cancel := context.WithCancel(ctx)
 
-	conn, err := dialer.DialContext(connectCtx, "tcp", fmt.Sprintf("%s:%d", c.server.ServerName, c.server.Port))
+	err := c.server.start(connectCtx)
 	if err != nil {
-		callback, ok := c.callbackHandlers[EventDisconnect]
-		if ok {
+		if callback, ok := c.callbackHandlers[EventError]; ok {
 			callback(EventType{
 				Err: err,
 			})
 		}
 
-		c.server.close()
+		if callback, ok := c.callbackHandlers[EventDisconnect]; ok {
+			callback(EventType{
+				Message: "Error from initial connect attempt",
+				Err:     err,
+			})
+		}
+
 		cancel()
 		return
 	}
 
-	c.connection = conn
-	c.readWriter = bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
-
-	callback, ok := c.callbackHandlers[EventConnect]
-	if ok {
+	if callback, ok := c.callbackHandlers[EventConnect]; ok {
 		callback(EventType{})
 	}
 
-	c.server.start(connectCtx, c.readWriter)
 	for {
 		select {
 		case line := <-c.server.recvChan:
@@ -86,15 +78,13 @@ func (c *Client) Connect(ctx context.Context) {
 
 		case ping := <-c.server.pingChan:
 			log.Println("ping received ", ping)
-			callback, ok := c.callbackHandlers[EventPing]
-			if ok {
+			if callback, ok := c.callbackHandlers[EventPing]; ok {
 				callback(EventType{})
 			}
 
 		case err := <-c.server.errChan:
 			log.Println("server error: ", err.Error())
-			callback, ok := c.callbackHandlers[EventError]
-			if ok {
+			if callback, ok := c.callbackHandlers[EventError]; ok {
 				callback(EventType{
 					Err: err,
 				})
@@ -102,8 +92,7 @@ func (c *Client) Connect(ctx context.Context) {
 
 		case <-ctx.Done():
 			log.Println("client connect context done()")
-			callback, ok := c.callbackHandlers[EventDisconnect]
-			if ok {
+			if callback, ok := c.callbackHandlers[EventDisconnect]; ok {
 				callback(EventType{})
 			}
 
