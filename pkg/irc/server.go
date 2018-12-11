@@ -25,8 +25,9 @@ type Server struct {
 	readWriter *bufio.ReadWriter
 	conn       net.Conn
 
-	wg       sync.WaitGroup
-	recvChan chan string
+	wg sync.WaitGroup
+	//TODO: these will neeed to be a custom struct to handle more data; make buffered
+	recvChan chan IncomingData
 	errChan  chan error
 	pingChan chan string
 }
@@ -42,14 +43,13 @@ func NewIRCServer(server string, useTLS bool) Server {
 		Timeout:  time.Minute * 3,
 		PingFreq: time.Minute * 2,
 
-		// make buffered
-		recvChan: make(chan string),
+		recvChan: make(chan IncomingData),
 		errChan:  make(chan error),
 		pingChan: make(chan string),
 	}
 }
 
-func (s *Server) start(ctx context.Context) error {
+func (s *Server) start(ctx context.Context, username, password string) error {
 	if !s.running {
 		s.running = true
 
@@ -65,6 +65,11 @@ func (s *Server) start(ctx context.Context) error {
 
 		s.conn = conn
 		s.readWriter = bufio.NewReadWriter(bufio.NewReader(conn), bufio.NewWriter(conn))
+
+		if len(password) > 1 {
+			s.pass(password)
+		}
+		s.user(username)
 
 		s.wg.Add(3)
 		go s.recv(ctx)
@@ -86,15 +91,15 @@ func (s *Server) recv(ctx context.Context) {
 			if err == io.EOF {
 				log.Println("EOF: closing connection ", err)
 				s.errChan <- err
-
 				return
 			}
 
 			s.errChan <- err
 		}
 
-		// TODO: parse the input type
-		s.recvChan <- data
+		if recData, ok := parseRawInput(data); ok {
+			s.recvChan <- recData
+		}
 	}
 }
 
