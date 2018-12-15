@@ -2,7 +2,7 @@ package irc
 
 import (
 	"context"
-	"log"
+	"fmt"
 )
 
 const (
@@ -23,16 +23,18 @@ type EventCallback func(EventType)
 
 //Client object describing the irc connection
 type Client struct {
-	UserName         string
 	IRCServer        string
+	UserName         string
+	Pass             string
 	server           Server
 	callbackHandlers map[string]EventCallback
 }
 
 //NewClient new client object with a defaut server setup
-func NewClient(nick, serverName string) *Client {
+func NewClient(nick, password, serverName string) *Client {
 	return &Client{
 		UserName:         nick,
+		Pass:             password,
 		IRCServer:        serverName,
 		callbackHandlers: make(map[string]EventCallback),
 		server:           NewIRCServer(serverName, false),
@@ -44,12 +46,11 @@ func (c *Client) HandleEventFunc(event string, cb EventCallback) {
 	c.callbackHandlers[event] = cb
 }
 
-//Connect connect to the irc server supplied in the Client object
-func (c *Client) Connect(ctx context.Context) {
-	connectCtx, cancel := context.WithCancel(ctx)
+//StartConnection connect to the irc server supplied in the Client object
+func (c *Client) StartConnection() {
+	connectCtx, cancel := context.WithCancel(context.Background())
 
-	err := c.server.start(connectCtx)
-	if err != nil {
+	if err := c.server.start(connectCtx, c.UserName, c.Pass); err != nil {
 		if callback, ok := c.callbackHandlers[EventError]; ok {
 			callback(EventType{
 				Err: err,
@@ -74,31 +75,36 @@ func (c *Client) Connect(ctx context.Context) {
 	for {
 		select {
 		case line := <-c.server.recvChan:
-			log.Printf("recvChan: %s", line)
+			// TODO
+			fmt.Printf("%v\n", line)
 
 		case ping := <-c.server.pingChan:
-			log.Println("ping received ", ping)
 			if callback, ok := c.callbackHandlers[EventPing]; ok {
-				callback(EventType{})
-			}
-
-		case err := <-c.server.errChan:
-			log.Println("server error: ", err.Error())
-			if callback, ok := c.callbackHandlers[EventError]; ok {
 				callback(EventType{
-					Err: err,
+					Message: ping,
 				})
 			}
 
-		case <-ctx.Done():
-			log.Println("client connect context done()")
+		case err := <-c.server.errChan:
+			if callback, ok := c.callbackHandlers[EventError]; ok {
+				callback(EventType{
+					Message: err.Error(),
+					Err:     err,
+				})
+			}
+
+		case <-c.server.closeChan:
+			cancel()
 			if callback, ok := c.callbackHandlers[EventDisconnect]; ok {
 				callback(EventType{})
 			}
 
-			c.server.close()
-			cancel()
+			c.server.wg.Wait()
 			return
 		}
 	}
+}
+
+func (c *Client) StopConnection() {
+	c.server.close()
 }

@@ -5,8 +5,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"io"
-	"log"
 	"net"
 	"sync"
 	"time"
@@ -27,9 +25,10 @@ type Server struct {
 
 	wg sync.WaitGroup
 	//TODO: these will neeed to be a custom struct to handle more data; make buffered
-	recvChan chan IncomingData
-	errChan  chan error
-	pingChan chan string
+	recvChan  chan IncomingData
+	errChan   chan error
+	pingChan  chan string
+	closeChan chan struct{}
 }
 
 //NewIRCServer create a new irc server
@@ -43,9 +42,10 @@ func NewIRCServer(server string, useTLS bool) Server {
 		Timeout:  time.Minute * 3,
 		PingFreq: time.Minute * 2,
 
-		recvChan: make(chan IncomingData),
-		errChan:  make(chan error),
-		pingChan: make(chan string),
+		recvChan:  make(chan IncomingData),
+		errChan:   make(chan error),
+		pingChan:  make(chan string),
+		closeChan: make(chan struct{}),
 	}
 }
 
@@ -85,22 +85,26 @@ func (s *Server) start(ctx context.Context, username, password string) error {
 func (s *Server) recv(ctx context.Context) {
 	defer s.wg.Done()
 
+loop:
 	for {
 		data, err := s.readWriter.ReadString('\n')
 		if err != nil {
-			if err == io.EOF {
-				log.Println("EOF: closing connection ", err)
-				s.errChan <- err
-				return
-			}
-
 			s.errChan <- err
+			s.closeChan <- struct{}{}
+
+			if s.running {
+				s.running = false
+				s.conn.Close()
+			}
+			break loop
 		}
 
 		if recData, ok := parseRawInput(data); ok {
 			s.recvChan <- recData
 		}
 	}
+
+	<-ctx.Done()
 }
 
 func (s *Server) send(ctx context.Context) {
@@ -108,8 +112,8 @@ func (s *Server) send(ctx context.Context) {
 
 	for {
 		select {
+		// TODO we will need a send channel
 		case <-ctx.Done():
-			log.Println("send ctx.Done called")
 			return
 		}
 	}
@@ -122,11 +126,10 @@ func (s *Server) sendPingResponse(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			log.Println("sending ping")
-			s.pingChan <- "all done with ping"
+			// s.ping()
+			s.pingChan <- "PONG response to PING sent"
 
 		case <-ctx.Done():
-			log.Println("ping ctx.Done called")
 			ticker.Stop()
 			return
 		}
@@ -134,8 +137,14 @@ func (s *Server) sendPingResponse(ctx context.Context) {
 }
 
 func (s *Server) close() {
-	// todo
+	if s.running {
+		s.running = false
+		s.conn.SetReadDeadline(time.Now())
+	}
+
+	s.wg.Wait()
 	close(s.pingChan)
 	close(s.recvChan)
 	close(s.errChan)
+	close(s.closeChan)
 }
