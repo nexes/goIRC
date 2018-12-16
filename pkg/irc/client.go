@@ -2,6 +2,7 @@ package irc
 
 import (
 	"context"
+	"errors"
 	"time"
 )
 
@@ -128,6 +129,17 @@ func (c *Client) listenToChannels(cancel context.CancelFunc) {
 						Room:    line.Room,
 						Message: line.Message,
 						Time:    line.Time,
+					})
+				}
+
+			case RPL_ERRORJOIN:
+				if callback, ok := c.callbackHandlers[EventError]; ok {
+					callback(EventType{
+						Server:  line.ServerName,
+						Room:    line.Room,
+						Code:    line.Code,
+						Message: line.Message,
+						Err:     errors.New(line.Message),
 					})
 				}
 

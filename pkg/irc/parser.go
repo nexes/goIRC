@@ -25,11 +25,12 @@ const (
 	RPL_ENDOFMOTD     = 376
 	RPL_FORWARDJOIN   = 470
 
+	RPL_ERRORJOIN = 477
+
 	RPL_ROOMJOIN = 999
 	RPL_ROOMPART = 998
 	RPL_ROOMQUIT = 997
-
-	RPL_PRIVMSG = 996
+	RPL_PRIVMSG  = 996
 )
 
 type IncomingData struct {
@@ -164,6 +165,11 @@ func parseNumericReply(responseCode int, segments []string) (IncomingData, bool)
 		data.CodeName = "RPL_FORWARDJOIN"
 		data.Message = strings.Join(segments[3:], " ")
 		data.Room = segments[4]
+	case RPL_ERRORJOIN:
+		data.Code = RPL_ERRORJOIN
+		data.CodeName = "RPL_ERRORJOIN"
+		data.Room = segments[3]
+		data.Message = strings.Join(segments[4:], " ")
 	}
 
 	return data, true
