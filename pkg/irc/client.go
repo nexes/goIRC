@@ -2,21 +2,28 @@ package irc
 
 import (
 	"context"
-	"fmt"
+	"time"
 )
 
 const (
-	EventPing       = "PING"
-	EventConnect    = "CONNECT"
-	EventDisconnect = "DISCONNECT"
-	EventError      = "ERROR"
-	EventRoomJoin   = "ROOMJOIN"
-	EventRoomLeave  = "ROOMLEAVE"
+	EventPing        = "PING"
+	EventConnect     = "CONNECT"
+	EventDisconnect  = "DISCONNECT"
+	EventError       = "ERROR"
+	EventRoomMessage = "ROOMMESSAGE"
+	EventRoomLeave   = "ROOMLEAVE"
+	EventMOTD        = "EVENTMOTD"
+	EventMessage     = "EVENTMESSAGE"
 )
 
 type EventType struct {
 	Message string
+	Server  string
+	Nick    string
+	Room    string
+	Code    int32
 	Err     error
+	Time    time.Time
 }
 
 type EventCallback func(EventType)
@@ -63,7 +70,6 @@ func (c *Client) StartConnection() {
 				Err:     err,
 			})
 		}
-
 		cancel()
 		return
 	}
@@ -72,11 +78,71 @@ func (c *Client) StartConnection() {
 		callback(EventType{})
 	}
 
+	c.listenToChannels(cancel)
+}
+
+//JoinRoom join a room on the connected irc server
+func (c *Client) JoinRoom(room string) {
+	c.server.join(room)
+}
+
+//StopConnection closes and disconnects from the irc server. This will stop the blocking nature of
+//StartConnection
+func (c *Client) StopConnection() {
+	c.server.close()
+}
+
+//this will block, listening for any data coming in from the server channels and send
+//the data to the correct callback
+func (c *Client) listenToChannels(cancel context.CancelFunc) {
 	for {
 		select {
 		case line := <-c.server.recvChan:
-			// TODO
-			fmt.Printf("%v\n", line)
+			switch line.Code {
+			case RPL_WELCOME, RPL_YOURHOST, RPL_CREATED, RPL_MYINFO, RPL_BOUNCE:
+				if callback, ok := c.callbackHandlers[EventConnect]; ok {
+					callback(EventType{
+						Message: line.Message,
+						Server:  line.ServerName,
+						Code:    line.Code,
+						Time:    line.Time,
+					})
+				}
+
+			case RPL_MOTD, RPL_ENDOFMOTD:
+				if callback, ok := c.callbackHandlers[EventMOTD]; ok {
+					callback(EventType{
+						Message: line.Message,
+						Code:    line.Code,
+						Server:  line.ServerName,
+						Time:    line.Time,
+					})
+				}
+
+			case RPL_TOPIC, RPL_NAMREPLY, RPL_ENDOFNAMES, RPL_FORWARDJOIN, RPL_ROOMJOIN, RPL_ROOMPART, RPL_ROOMQUIT:
+				if callback, ok := c.callbackHandlers[EventRoomMessage]; ok {
+					callback(EventType{
+						Server:  line.ServerName,
+						Code:    line.Code,
+						Nick:    line.Nick,
+						Room:    line.Room,
+						Message: line.Message,
+						Time:    line.Time,
+					})
+				}
+
+			case RPL_PRIVMSG:
+				if callback, ok := c.callbackHandlers[EventMessage]; ok {
+					callback(EventType{
+						Server:  line.ServerName,
+						Code:    line.Code,
+						Nick:    line.Nick,
+						Room:    line.Room,
+						Message: line.Message,
+						Time:    line.Time,
+					})
+				}
+			}
 
 		case ping := <-c.server.pingChan:
 			if callback, ok := c.callbackHandlers[EventPing]; ok {
@@ -103,8 +169,4 @@ func (c *Client) StartConnection() {
 			return
 		}
 	}
-}
-
-func (c *Client) StopConnection() {
-	c.server.close()
 }
