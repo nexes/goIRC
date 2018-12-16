@@ -25,7 +25,7 @@ func main() {
 	})
 
 	client.HandleEventFunc(irc.EventError, func(event irc.EventType) {
-		fmt.Printf("Error event: %v\n", event.Err)
+		fmt.Printf("Error event code %d: msg: %s\n", event.Code, event.Err.Error())
 	})
 
 	client.HandleEventFunc(irc.EventMOTD, func(event irc.EventType) {
@@ -39,11 +39,21 @@ func main() {
 	client.HandleEventFunc(irc.EventRoomMessage, func(event irc.EventType) {
 		switch event.Code {
 		case irc.RPL_ROOMJOIN:
-			fmt.Printf("%s Joined %s", event.Nick, event.Room)
+			// check if you successfully joined the room
+			if event.Nick == "hilljoh" {
+				fmt.Println("You just joined ", event.Room)
+			} else {
+				fmt.Printf("%s Joined %s", event.Nick, event.Room)
+			}
+
 		case irc.RPL_ROOMPART:
 			fmt.Printf("%s Parted %s", event.Nick, event.Room)
+
 		case irc.RPL_ROOMQUIT:
-			fmt.Printf("%s Quit %s", event.Nick, event.Room)
+			fmt.Printf("%s Quit %s\n", event.Nick, event.Room)
+
+		case irc.RPL_TOPIC:
+			fmt.Printf("Topic: %s\n", event.Message)
 		}
 	})
 
@@ -58,7 +68,6 @@ func main() {
 			}
 
 			args := strings.Split(input, " ")
-			fmt.Printf("args[0] = %s\n", args[0])
 
 			switch strings.ToLower(args[0]) {
 			case "/quit":
