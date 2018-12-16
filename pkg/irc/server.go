@@ -49,6 +49,7 @@ func NewIRCServer(server string, useTLS bool) Server {
 	}
 }
 
+//start will make the initial irc connection and start the needed go routines if no errors occured
 func (s *Server) start(ctx context.Context, username, password string) error {
 	if !s.running {
 		s.running = true
@@ -82,10 +83,11 @@ func (s *Server) start(ctx context.Context, username, password string) error {
 	return errors.New("Calling start on a running server")
 }
 
+//block waiting to receive anything from the connected irc server, if a I/O error happens, the connection
+//will be cloased and the server disconnected
 func (s *Server) recv(ctx context.Context) {
 	defer s.wg.Done()
 
-loop:
 	for {
 		data, err := s.readWriter.ReadString('\n')
 		if err != nil {
@@ -96,7 +98,7 @@ loop:
 				s.running = false
 				s.conn.Close()
 			}
-			break loop
+			break
 		}
 
 		if recData, ok := parseRawInput(data); ok {
@@ -107,6 +109,7 @@ loop:
 	<-ctx.Done()
 }
 
+//send will send user commands to the connected irc server
 func (s *Server) send(ctx context.Context) {
 	defer s.wg.Done()
 
@@ -119,6 +122,7 @@ func (s *Server) send(ctx context.Context) {
 	}
 }
 
+//send our automatic ping/pong responses
 func (s *Server) sendPingResponse(ctx context.Context) {
 	ticker := time.NewTicker(s.PingFreq)
 	defer s.wg.Done()
@@ -126,8 +130,8 @@ func (s *Server) sendPingResponse(ctx context.Context) {
 	for {
 		select {
 		case <-ticker.C:
-			// s.ping()
-			s.pingChan <- "PONG response to PING sent"
+			s.ping()
+			s.pingChan <- "PONG response to PING"
 
 		case <-ctx.Done():
 			ticker.Stop()
@@ -136,6 +140,7 @@ func (s *Server) sendPingResponse(ctx context.Context) {
 	}
 }
 
+//close will closed the server connection and close the active go routines
 func (s *Server) close() {
 	if s.running {
 		s.running = false
