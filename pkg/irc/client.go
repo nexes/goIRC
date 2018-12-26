@@ -87,6 +87,11 @@ func (c *Client) JoinRoom(room string) {
 	c.server.join(room)
 }
 
+//WriteToRoom will send the message to the room.
+func (c *Client) WriteToRoom(room string, message string) {
+	c.server.privMessage(room, message)
+}
+
 //StopConnection closes and disconnects from the irc server. This will stop the blocking nature of
 //StartConnection
 func (c *Client) StopConnection() {

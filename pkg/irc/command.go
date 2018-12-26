@@ -32,3 +32,12 @@ func (s *Server) join(room string) {
 	}
 	s.readWriter.Flush()
 }
+
+func (s *Server) privMessage(target, message string) {
+	s.readWriter.WriteString(fmt.Sprintf("PRIVMSG %s :%s\r\n", target, message))
+	s.readWriter.Flush()
+}
+
+func (s *Server) list(scope string) {
+	// TODO
+}

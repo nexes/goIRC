@@ -50,7 +50,7 @@ func parseRawInput(line string) (IncomingData, bool) {
 		return IncomingData{}, false
 	}
 
-	segments := strings.Split(line, " ")
+	segments := strings.Split(strings.TrimSpace(line), " ")
 	responseCode, err := strconv.Atoi(segments[1])
 
 	if err != nil {
