@@ -3,18 +3,19 @@ package irc
 import (
 	"context"
 	"errors"
+	"strings"
 	"time"
 )
 
 const (
-	EventPing        = "PING"
-	EventConnect     = "CONNECT"
-	EventDisconnect  = "DISCONNECT"
-	EventError       = "ERROR"
-	EventRoomMessage = "ROOMMESSAGE"
-	EventRoomLeave   = "ROOMLEAVE"
-	EventMOTD        = "EVENTMOTD"
-	EventMessage     = "EVENTMESSAGE"
+	EventPing           = "PING"
+	EventConnect        = "CONNECT"
+	EventDisconnect     = "DISCONNECT"
+	EventError          = "ERROR"
+	EventRoomMessage    = "ROOMMESSAGE"
+	EventChannelMessage = "CHANNELMESSAGE"
+	EventMOTD           = "EVENTMOTD"
+	EventMessage        = "EVENTMESSAGE"
 )
 
 type EventType struct {
@@ -82,24 +83,27 @@ func (c *Client) StartConnection() {
 	c.listenToChannels(cancel)
 }
 
-//JoinRoom join a room on the connected irc server
-func (c *Client) JoinRoom(room string) {
-	c.server.join(room)
-}
-
-//WriteToRoom will send the message to the room.
-func (c *Client) WriteToRoom(room string, message string) {
-	c.server.privMessage(room, message)
+//WriteToTarget will send the message to the target, e.g the room, a user etc
+func (c *Client) WriteToTarget(target string, message string) {
+	c.server.privMessage(target, message)
 }
 
 //StopConnection closes and disconnects from the irc server. This will stop the blocking nature of
-//StartConnection
 func (c *Client) StopConnection() {
 	c.server.close()
 }
 
-//this will block, listening for any data coming in from the server channels and send
-//the data to the correct callback
+func (c *Client) Command(command Command) {
+	// TODO
+	if len(command.Action) > 0 {
+		command.Action = strings.ToLower(strings.TrimSpace(command.Action))
+		command.Args = strings.ToLower(strings.TrimSpace(command.Args))
+
+		c.server.sendChan <- command
+	}
+}
+
+//this will block, listening for any data coming in from the server channels and send the data to the correct callback
 func (c *Client) listenToChannels(cancel context.CancelFunc) {
 	for {
 		select {
@@ -125,7 +129,19 @@ func (c *Client) listenToChannels(cancel context.CancelFunc) {
 					})
 				}
 
-			case RPL_TOPIC, RPL_NAMREPLY, RPL_ENDOFNAMES, RPL_FORWARDJOIN, RPL_ROOMJOIN, RPL_ROOMPART, RPL_ROOMQUIT:
+			case RPL_LIST, RPL_LISTEND, RPL_FORWARDJOIN:
+				if callback, ok := c.callbackHandlers[EventChannelMessage]; ok {
+					callback(EventType{
+						Server:  line.ServerName,
+						Code:    line.Code,
+						Nick:    line.Nick,
+						Room:    line.Room,
+						Time:    line.Time,
+						Message: line.Message,
+					})
+				}
+
+			case RPL_TOPIC, RPL_NAMREPLY, RPL_ENDOFNAMES, RPL_ROOMJOIN, RPL_ROOMPART, RPL_ROOMQUIT:
 				if callback, ok := c.callbackHandlers[EventRoomMessage]; ok {
 					callback(EventType{
 						Server:  line.ServerName,

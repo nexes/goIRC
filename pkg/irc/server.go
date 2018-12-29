@@ -26,6 +26,7 @@ type Server struct {
 	wg sync.WaitGroup
 	//TODO: these will neeed to be a custom struct to handle more data; make buffered
 	recvChan  chan IncomingData
+	sendChan  chan Command
 	errChan   chan error
 	pingChan  chan string
 	closeChan chan struct{}
@@ -43,6 +44,7 @@ func NewIRCServer(server string, useTLS bool) Server {
 		PingFreq: time.Minute * 2,
 
 		recvChan:  make(chan IncomingData),
+		sendChan:  make(chan Command),
 		errChan:   make(chan error),
 		pingChan:  make(chan string),
 		closeChan: make(chan struct{}),
@@ -115,7 +117,14 @@ func (s *Server) send(ctx context.Context) {
 
 	for {
 		select {
-		// TODO we will need a send channel
+		case command := <-s.sendChan:
+			switch command.Action {
+			case "join":
+				s.join(command.Args)
+			case "list":
+				s.list(command.Args)
+			}
+
 		case <-ctx.Done():
 			return
 		}
