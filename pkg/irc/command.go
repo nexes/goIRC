@@ -4,6 +4,11 @@ import (
 	"fmt"
 )
 
+type Command struct {
+	Action string
+	Args   string
+}
+
 func (s *Server) ping() {
 	s.readWriter.WriteString(fmt.Sprintf("PONG %s", s.ServerName))
 	s.readWriter.Flush()
@@ -39,5 +44,6 @@ func (s *Server) privMessage(target, message string) {
 }
 
 func (s *Server) list(scope string) {
-	// TODO
+	s.readWriter.WriteString(fmt.Sprintf("LIST %s\r\n", scope))
+	s.readWriter.Flush()
 }

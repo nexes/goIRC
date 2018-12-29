@@ -17,6 +17,8 @@ const (
 	RPL_LUSERUNKNOWN  = 253
 	RPL_LUSERCHANNELS = 254
 	RPL_LUSERME       = 255
+	RPL_LIST          = 322
+	RPL_LISTEND       = 323
 	RPL_TOPIC         = 332
 	RPL_NAMREPLY      = 353
 	RPL_ENDOFNAMES    = 366
@@ -38,6 +40,7 @@ type IncomingData struct {
 	CodeName   string
 	ServerName string
 	Room       string
+	Count      int
 	Nick       string
 	Message    string
 	Time       time.Time
@@ -163,13 +166,26 @@ func parseNumericReply(responseCode int, segments []string) (IncomingData, bool)
 	case RPL_FORWARDJOIN:
 		data.Code = RPL_FORWARDJOIN
 		data.CodeName = "RPL_FORWARDJOIN"
-		data.Message = strings.Join(segments[3:], " ")
+		data.Message = strings.Join(segments[5:], " ")
 		data.Room = segments[4]
 	case RPL_ERRORJOIN:
 		data.Code = RPL_ERRORJOIN
 		data.CodeName = "RPL_ERRORJOIN"
 		data.Room = segments[3]
 		data.Message = strings.Join(segments[4:], " ")
+	case RPL_LIST:
+		data.Code = RPL_LIST
+		data.CodeName = "RPL_LIST"
+		data.Room = segments[3]
+		data.Message = strings.Join(segments[5:], " ")
+		data.Count = 0
+		if count, err := strconv.Atoi(segments[4]); err == nil {
+			data.Count = count
+		}
+	case RPL_LISTEND:
+		data.Code = RPL_LISTEND
+		data.CodeName = "RPL_LISTEND"
+		data.Message = strings.Join(segments[3:], " ")
 	}
 
 	return data, true
