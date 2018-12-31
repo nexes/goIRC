@@ -123,6 +123,8 @@ func (s *Server) send(ctx context.Context) {
 				s.join(command.Args)
 			case "list":
 				s.list(command.Args)
+			case "names":
+				s.name(command.Args)
 			}
 
 		case <-ctx.Done():

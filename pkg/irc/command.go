@@ -47,3 +47,8 @@ func (s *Server) list(scope string) {
 	s.readWriter.WriteString(fmt.Sprintf("LIST %s\r\n", scope))
 	s.readWriter.Flush()
 }
+
+func (s *Server) name(scope string) {
+	s.readWriter.WriteString(fmt.Sprintf("NAMES %s\r\n", scope))
+	s.readWriter.Flush()
+}

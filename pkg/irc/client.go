@@ -129,7 +129,7 @@ func (c *Client) listenToChannels(cancel context.CancelFunc) {
 					})
 				}
 
-			case RPL_LIST, RPL_LISTEND, RPL_FORWARDJOIN:
+			case RPL_LIST, RPL_LISTEND, RPL_FORWARDJOIN, RPL_NAMREPLY, RPL_ENDOFNAMES:
 				if callback, ok := c.callbackHandlers[EventChannelMessage]; ok {
 					callback(EventType{
 						Server:  line.ServerName,
@@ -141,7 +141,7 @@ func (c *Client) listenToChannels(cancel context.CancelFunc) {
 					})
 				}
 
-			case RPL_TOPIC, RPL_NAMREPLY, RPL_ENDOFNAMES, RPL_ROOMJOIN, RPL_ROOMPART, RPL_ROOMQUIT:
+			case RPL_TOPIC, RPL_ROOMJOIN, RPL_ROOMPART, RPL_ROOMQUIT:
 				if callback, ok := c.callbackHandlers[EventRoomMessage]; ok {
 					callback(EventType{
 						Server:  line.ServerName,
