@@ -22,31 +22,33 @@ const (
 	RPL_TOPIC         = 332
 	RPL_NAMREPLY      = 353
 	RPL_ENDOFNAMES    = 366
+	RPL_FORWARDJOIN   = 470
 	RPL_MOTDSTART     = 375
 	RPL_MOTD          = 372
 	RPL_ENDOFMOTD     = 376
-	RPL_FORWARDJOIN   = 470
 
-	RPL_ROOMJOIN = 999
-	RPL_ROOMPART = 998
-	RPL_ROOMQUIT = 997
-	RPL_PRIVMSG  = 996
+	RPL_ROOMJOIN = 199
+	RPL_ROOMPART = 198
+	RPL_ROOMQUIT = 197
+	RPL_PRIVMSG  = 196
 )
 
 const (
-	ERR_CODE             = 400
-	ERR_NOSUCHNICK       = 401
-	ERR_NOSUCHSERVER     = 402
-	ERR_NOSUCHCHANNEL    = 403
-	ERR_CANNOTSENDTOCHAN = 404
-	ERR_TOOMANYCHANNELS  = 405
-	ERR_WASNOSUCHNICK    = 406
-	ERR_NORECIPIENT      = 411
-	ERR_NOTEXTTOSEND     = 412
-	ERR_NOTOPLEVEL       = 413
-	ERR_WILDTOPLEVEL     = 414
-	ERR_BADMASK          = 415
-	RPL_ERRORJOIN        = 477
+	// we are adding 100 to the real irc error code to make parsing a little easier
+	ERR_CODE_BEGIN       = 400 + 100
+	ERR_NOSUCHNICK       = 401 + 100
+	ERR_NOSUCHSERVER     = 402 + 100
+	ERR_NOSUCHCHANNEL    = 403 + 100
+	ERR_CANNOTSENDTOCHAN = 404 + 100
+	ERR_TOOMANYCHANNELS  = 405 + 100
+	ERR_WASNOSUCHNICK    = 406 + 100
+	ERR_NORECIPIENT      = 411 + 100
+	ERR_NOTEXTTOSEND     = 412 + 100
+	ERR_NOTOPLEVEL       = 413 + 100
+	ERR_WILDTOPLEVEL     = 414 + 100
+	ERR_BADMASK          = 415 + 100
+	RPL_ERRORJOIN        = 417 + 100
+	ERR_CODE_END         = 500 + 100
 )
 
 type IncomingData struct {
@@ -69,12 +71,11 @@ func parseRawInput(line string) (IncomingData, bool) {
 
 	segments := strings.Split(strings.TrimSpace(line), " ")
 	responseCode, err := strconv.Atoi(segments[1])
-
 	if err != nil {
 		return parseNonNumericReply(segments)
 	}
 
-	if responseCode > ERR_CODE {
+	if responseCode > ERR_CODE_BEGIN && responseCode < ERR_CODE_END {
 		return parseNumericError(responseCode, segments)
 	} else {
 		return parseNumericReply(responseCode, segments)
@@ -255,9 +256,6 @@ func parseNumericError(errorCode int, segments []string) (IncomingData, bool) {
 	case ERR_WILDTOPLEVEL:
 		data.Code = ERR_WILDTOPLEVEL
 		data.CodeName = "ERR_WILDTOPLEVEL"
-	case RPL_ERRORJOIN:
-		data.Code = RPL_ERRORJOIN
-		data.CodeName = "RPL_ERRORJOIN"
 	}
 
 	return data, true
