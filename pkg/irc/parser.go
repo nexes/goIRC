@@ -27,12 +27,26 @@ const (
 	RPL_ENDOFMOTD     = 376
 	RPL_FORWARDJOIN   = 470
 
-	RPL_ERRORJOIN = 477
-
 	RPL_ROOMJOIN = 999
 	RPL_ROOMPART = 998
 	RPL_ROOMQUIT = 997
 	RPL_PRIVMSG  = 996
+)
+
+const (
+	ERR_CODE             = 400
+	ERR_NOSUCHNICK       = 401
+	ERR_NOSUCHSERVER     = 402
+	ERR_NOSUCHCHANNEL    = 403
+	ERR_CANNOTSENDTOCHAN = 404
+	ERR_TOOMANYCHANNELS  = 405
+	ERR_WASNOSUCHNICK    = 406
+	ERR_NORECIPIENT      = 411
+	ERR_NOTEXTTOSEND     = 412
+	ERR_NOTOPLEVEL       = 413
+	ERR_WILDTOPLEVEL     = 414
+	ERR_BADMASK          = 415
+	RPL_ERRORJOIN        = 477
 )
 
 type IncomingData struct {
@@ -58,6 +72,10 @@ func parseRawInput(line string) (IncomingData, bool) {
 
 	if err != nil {
 		return parseNonNumericReply(segments)
+	}
+
+	if responseCode > ERR_CODE {
+		return parseNumericError(responseCode, segments)
 	} else {
 		return parseNumericReply(responseCode, segments)
 	}
@@ -186,6 +204,60 @@ func parseNumericReply(responseCode int, segments []string) (IncomingData, bool)
 		data.Code = RPL_LISTEND
 		data.CodeName = "RPL_LISTEND"
 		data.Message = strings.Join(segments[3:], " ")
+	}
+
+	return data, true
+}
+
+func parseNumericError(errorCode int, segments []string) (IncomingData, bool) {
+	data := IncomingData{}
+
+	data.ServerName = segments[0][1:]
+	data.Time = time.Now()
+	data.Nick = segments[2]
+	data.Message = strings.Join(segments[3:], " ")
+
+	if data.Message[0] == ':' {
+		data.Message = data.Message[1:]
+	}
+
+	switch errorCode {
+	case ERR_BADMASK:
+		data.Code = ERR_NOTEXTTOSEND
+		data.CodeName = "ERR_NOTEXTTOSEND"
+	case ERR_NOTEXTTOSEND:
+		data.Code = ERR_NOTEXTTOSEND
+		data.CodeName = "ERR_NOTEXTTOSEND"
+	case ERR_NOSUCHNICK:
+		data.Code = ERR_NOSUCHNICK
+		data.CodeName = "ERR_NOSUCHNICK"
+	case ERR_NOSUCHSERVER:
+		data.Code = ERR_NOSUCHSERVER
+		data.CodeName = "ERR_NOSUCHSERVER"
+	case ERR_NOSUCHCHANNEL:
+		data.Code = ERR_NOSUCHCHANNEL
+		data.CodeName = "ERR_NOSUCHCHANNEL"
+	case ERR_CANNOTSENDTOCHAN:
+		data.Code = ERR_CANNOTSENDTOCHAN
+		data.CodeName = "ERR_CANNOTSENDTOCHAN"
+	case ERR_TOOMANYCHANNELS:
+		data.Code = ERR_TOOMANYCHANNELS
+		data.CodeName = "ERR_TOOMANYCHANNELS"
+	case ERR_WASNOSUCHNICK:
+		data.Code = ERR_WASNOSUCHNICK
+		data.CodeName = "ERR_WASNOSUCHNICK"
+	case ERR_NORECIPIENT:
+		data.Code = ERR_NORECIPIENT
+		data.CodeName = "ERR_NORECIPIENT"
+	case ERR_NOTOPLEVEL:
+		data.Code = ERR_NOTOPLEVEL
+		data.CodeName = "ERR_NOTOPLEVEL"
+	case ERR_WILDTOPLEVEL:
+		data.Code = ERR_WILDTOPLEVEL
+		data.CodeName = "ERR_WILDTOPLEVEL"
+	case RPL_ERRORJOIN:
+		data.Code = RPL_ERRORJOIN
+		data.CodeName = "RPL_ERRORJOIN"
 	}
 
 	return data, true
