@@ -34,21 +34,18 @@ const (
 )
 
 const (
-	// we are adding 100 to the real irc error code to make parsing a little easier
-	ERR_CODE_BEGIN       = 400 + 100
-	ERR_NOSUCHNICK       = 401 + 100
-	ERR_NOSUCHSERVER     = 402 + 100
-	ERR_NOSUCHCHANNEL    = 403 + 100
-	ERR_CANNOTSENDTOCHAN = 404 + 100
-	ERR_TOOMANYCHANNELS  = 405 + 100
-	ERR_WASNOSUCHNICK    = 406 + 100
-	ERR_NORECIPIENT      = 411 + 100
-	ERR_NOTEXTTOSEND     = 412 + 100
-	ERR_NOTOPLEVEL       = 413 + 100
-	ERR_WILDTOPLEVEL     = 414 + 100
-	ERR_BADMASK          = 415 + 100
-	RPL_ERRORJOIN        = 417 + 100
-	ERR_CODE_END         = 500 + 100
+	ERR_NOSUCHNICK       = 401
+	ERR_NOSUCHSERVER     = 402
+	ERR_NOSUCHCHANNEL    = 403
+	ERR_CANNOTSENDTOCHAN = 404
+	ERR_TOOMANYCHANNELS  = 405
+	ERR_WASNOSUCHNICK    = 406
+	ERR_NORECIPIENT      = 411
+	ERR_NOTEXTTOSEND     = 412
+	ERR_NOTOPLEVEL       = 413
+	ERR_WILDTOPLEVEL     = 414
+	ERR_BADMASK          = 415
+	RPL_ERRORJOIN        = 417
 )
 
 type IncomingData struct {
@@ -75,11 +72,7 @@ func parseRawInput(line string) (IncomingData, bool) {
 		return parseNonNumericReply(segments)
 	}
 
-	if responseCode > ERR_CODE_BEGIN && responseCode < ERR_CODE_END {
-		return parseNumericError(responseCode, segments)
-	} else {
-		return parseNumericReply(responseCode, segments)
-	}
+	return parseNumericReply(responseCode, segments)
 }
 
 func parseNonNumericReply(segments []string) (IncomingData, bool) {
@@ -205,24 +198,8 @@ func parseNumericReply(responseCode int, segments []string) (IncomingData, bool)
 		data.Code = RPL_LISTEND
 		data.CodeName = "RPL_LISTEND"
 		data.Message = strings.Join(segments[3:], " ")
-	}
 
-	return data, true
-}
-
-func parseNumericError(errorCode int, segments []string) (IncomingData, bool) {
-	data := IncomingData{}
-
-	data.ServerName = segments[0][1:]
-	data.Time = time.Now()
-	data.Nick = segments[2]
-	data.Message = strings.Join(segments[3:], " ")
-
-	if data.Message[0] == ':' {
-		data.Message = data.Message[1:]
-	}
-
-	switch errorCode {
+	// error responses
 	case ERR_BADMASK:
 		data.Code = ERR_NOTEXTTOSEND
 		data.CodeName = "ERR_NOTEXTTOSEND"
