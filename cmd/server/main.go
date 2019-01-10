@@ -37,25 +37,27 @@ func main() {
 		fmt.Printf("[%s]: %s - %s\n", event.Room, event.Nick, event.Message)
 	})
 
+	client.HandleEventFunc(irc.EventChannelMessage, func(event irc.EventType) {
+		switch event.Code {
+		case irc.RPL_FORWARDJOIN:
+			// sometimes the room will forward to a different named room, e.g #programming -> ##programming
+			fmt.Printf("Room forwared to %s. message: %s\n", event.Room, event.Message)
+			currentRoom = event.Room
+		case irc.RPL_LIST:
+			fmt.Printf("List: Room = %s. Topic =  %s\n", event.Room, event.Message)
+		case irc.RPL_NAMREPLY:
+			fmt.Printf("Name for %s: %s\n", event.Room, event.Message)
+		}
+	})
+
 	client.HandleEventFunc(irc.EventRoomMessage, func(event irc.EventType) {
 		switch event.Code {
 		case irc.RPL_ROOMJOIN:
-			// check if you successfully joined the room
-			if event.Nick == "hilljoh" {
-				fmt.Println("You just joined ", event.Room)
-				// sometimes the room will forward to a different named room, e.g #programming -> ##programming
-				// event.Room will hold the updated room name if it changed
-				currentRoom = event.Room
-			} else {
-				fmt.Printf("%s Joined %s\n", event.Nick, event.Room)
-			}
-
+			fmt.Printf("\t%s Joined %s\n", event.Nick, event.Room)
 		case irc.RPL_ROOMPART:
-			fmt.Printf("%s Parted %s\n", event.Nick, event.Room)
-
+			fmt.Printf("\t%s Parted %s\n", event.Nick, event.Room)
 		case irc.RPL_ROOMQUIT:
-			fmt.Printf("%s Quit %s\n", event.Nick, event.Room)
-
+			fmt.Printf("\t%s Quit %s\n", event.Nick, event.Room)
 		case irc.RPL_TOPIC:
 			fmt.Printf("TOPIC: %s\n\n", event.Message)
 		}
@@ -71,20 +73,31 @@ func main() {
 				fmt.Println("error reading stdio ", err)
 			}
 
-			args := strings.Split(input, " ")
+			args := strings.Split(strings.TrimSpace(input), " ")
 
 			switch strings.ToLower(args[0]) {
+			case "/join":
+				client.Command(irc.Command{
+					Action: "join",
+					Args:   args[1],
+				})
+			case "/list":
+				client.Command(irc.Command{
+					Action: "list",
+					Args:   args[1],
+				})
+			case "/names":
+				client.Command(irc.Command{
+					Action: "names",
+					Args:   args[1],
+				})
 			case "/quit":
 				client.StopConnection()
 				break loop
 
-			case "/join":
-				currentRoom = args[1]
-				client.JoinRoom(currentRoom)
-
 			default:
 				message := strings.Join(args, " ")
-				client.WriteToRoom(currentRoom, message)
+				client.WriteToTarget(currentRoom, message)
 			}
 		}
 	}()
