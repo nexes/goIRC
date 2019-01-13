@@ -79,17 +79,27 @@ func main() {
 			case "/join":
 				client.Command(irc.Command{
 					Action: "join",
-					Args:   args[1],
+					Args:   args[1:],
 				})
 			case "/list":
 				client.Command(irc.Command{
 					Action: "list",
-					Args:   args[1],
+					Args:   args[1:],
 				})
 			case "/names":
 				client.Command(irc.Command{
 					Action: "names",
-					Args:   args[1],
+					Args:   args[1:],
+				})
+			case "/part":
+				client.Command(irc.Command{
+					Action: "part",
+					Args:   args[1:],
+				})
+			case "/kick":
+				client.Command(irc.Command{
+					Action: "kick",
+					Args:   args[1:],
 				})
 			case "/quit":
 				client.StopConnection()
