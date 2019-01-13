@@ -18,6 +18,7 @@ const (
 	EventMessage        = "EVENTMESSAGE"
 )
 
+//EventType the data that will be sent to the EventCallback func
 type EventType struct {
 	Message string
 	Server  string
@@ -28,6 +29,7 @@ type EventType struct {
 	Time    time.Time
 }
 
+//EventCallback the function signature for callback events
 type EventCallback func(EventType)
 
 //Client object describing the irc connection
@@ -93,11 +95,15 @@ func (c *Client) StopConnection() {
 	c.server.close()
 }
 
+//Command send an irc command
 func (c *Client) Command(command Command) {
-	// TODO
+	// trim and make everything lower case
 	if len(command.Action) > 0 {
 		command.Action = strings.ToLower(strings.TrimSpace(command.Action))
-		command.Args = strings.ToLower(strings.TrimSpace(command.Args))
+
+		for index, comm := range command.Args {
+			command.Args[index] = strings.ToLower(strings.TrimSpace(comm))
+		}
 
 		c.server.sendChan <- command
 	}

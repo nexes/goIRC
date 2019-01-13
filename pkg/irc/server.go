@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
@@ -118,13 +119,19 @@ func (s *Server) send(ctx context.Context) {
 	for {
 		select {
 		case command := <-s.sendChan:
-			switch command.Action {
+			switch strings.ToLower(command.Action) {
 			case "join":
-				s.join(command.Args)
+				s.join(command.Args...)
 			case "list":
-				s.list(command.Args)
+				s.list(command.Args...)
 			case "names":
-				s.name(command.Args)
+				s.name(command.Args...)
+			case "invite":
+				s.invite(command.Args[0], command.Args[1])
+			case "kick":
+				s.kick(command.Args[0], command.Args[1], strings.Join(command.Args[2:], " "))
+			case "part":
+				s.part(command.Args[0], strings.Join(command.Args[1:], " "))
 			}
 
 		case <-ctx.Done():
