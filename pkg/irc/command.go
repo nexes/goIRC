@@ -34,7 +34,6 @@ func (s *Server) join(room ...string) {
 	}
 
 	rooms := strings.Join(room, ",")
-	fmt.Println("join ", rooms)
 
 	_, e := s.readWriter.WriteString(fmt.Sprintf("JOIN %s\r\n", rooms))
 	if e != nil {
