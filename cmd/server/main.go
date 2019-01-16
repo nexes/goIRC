@@ -33,6 +33,7 @@ func main() {
 		fmt.Printf("%s\n", event.Message)
 	})
 
+	// this event is called when privmsg is received
 	client.HandleEventFunc(irc.EventMessage, func(event irc.EventType) {
 		fmt.Printf("[%s]: %s - %s\n", event.Room, event.Nick, event.Message)
 	})
